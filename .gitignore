@@ -1,0 +1,18 @@
+# IDE
+.idea
+.vscode
+
+# Go
+/go-backend/bin/
+/go-backend/pkg/
+
+# Python
+/python_scripts/venv/
+__pycache__/
+
+# Node.js
+/react-frontend/node_modules/
+/react-frontend/build/
+
+# General
+*.log
