@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Table,
   TableBody,
@@ -62,6 +62,7 @@ const devices = [
 
 export default function DeviceTable() {
   const [selectedDevice, setSelectedDevice] = useState(null)
+  const modalRef = useRef(null)
 
   const handleRowClick = (device) => {
     setSelectedDevice(device)
@@ -70,6 +71,22 @@ export default function DeviceTable() {
   const handleCloseModal = () => {
     setSelectedDevice(null)
   }
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        handleCloseModal()
+      }
+    }
+
+    if (selectedDevice) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [selectedDevice])
 
   return (
     <div className="relative">
@@ -107,7 +124,7 @@ export default function DeviceTable() {
 
       {selectedDevice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-background p-6 rounded-lg shadow-lg w-3/4 h-3/4 overflow-auto">
+          <div ref={modalRef} className="bg-background p-6 rounded-lg shadow-lg w-3/4 h-3/4 overflow-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">Device Details: {selectedDevice.id}</h2>
               <Button variant="ghost" size="icon" onClick={handleCloseModal}>

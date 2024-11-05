@@ -1,92 +1,184 @@
-import Image from "next/image";
-export default function Home() {
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import {
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  Laptop,
+  LayoutGrid,
+  MapPin,
+  MonitorOff,
+  MonitorPlay,
+  RefreshCcw,
+} from "lucide-react"
+import Map from "@/components/map";
+
+export default function Dashboard() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Dashboard Overview</h1>
-      <div className="px-20"> {/* Add horizontal padding */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded shadow">
-            <h2 className="font-bold">Edge device summary</h2>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Total Devices:</p>
-              <p className="text-3xl">1,245</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Online Devices:</p>
-              <p className="text-3xl">1,200</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Offline Devices:</p>
-              <p className="text-3xl">45</p>
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h2 className="font-bold">Application health summary</h2>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Active Applications:</p>
-              <p className="text-3xl">825</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Down Applications:</p>
-              <p className="text-3xl">5</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Maintenance:</p>
-              <p className="text-3xl">2</p>
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h2 className="font-bold">Alerts & notifications</h2>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Total Alerts:</p>
-              <p className="text-3xl">10</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Critical Alerts:</p>
-              <p className="text-3xl">3</p>
-            </div>
-            <div className="flex justify-between items-center">
-              <p className="text-lg">Resolved Alerts:</p>
-              <p className="text-3xl">7</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Map Section */}
-      <div className="mt-8">
-        <h2 className="text-xl font-bold mb-4">Map</h2>
-        {/* Flex container to split into two divs */}
-        <div className="flex w-full gap-4 h-96"> {/* Use flex instead of grid */}
-          <div className="bg-blue-200 p-4 rounded shadow" style={{ flex: '2 0 0%' }}> {/* Left div (2/3 width) */}
-            <h3 className="font-bold">Map Section</h3>
-          </div>
-          <div className="bg-green-200 p-4 rounded shadow" style={{ flex: '1 0 0%' }}> {/* Right div (1/3 width) */}
-            <h3 className="font-bold">Legend</h3>
-            <div className="grid grid-cols-2 gap-2"> {/* Create a grid with 2 columns */}
-              <div>
-                <p>Blue:</p>
-                <p>Green:</p>
-                <p>Orange:</p>
-                <p>Red:</p>
+    <div className="flex flex-col gap-6 p-6">
+      <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
+      
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Edge Device Summary */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Edge device summary</CardTitle>
+            <Laptop className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Total Devices:</span>
+                <span className="text-2xl font-bold">1,245</span>
               </div>
-              <div>
-                <p>Selected cluster</p>
-                <p>Online</p>
-                <p>Errors</p>
-                <p>Offline</p>
+              <div className="flex items-center justify-between text-green-600">
+                <div className="flex items-center gap-2">
+                  <MonitorPlay className="w-4 h-4" />
+                  <span className="text-sm">Online Devices:</span>
+                </div>
+                <span className="text-2xl font-bold">1,200</span>
+              </div>
+              <div className="flex items-center justify-between text-red-600">
+                <div className="flex items-center gap-2">
+                  <MonitorOff className="w-4 h-4" />
+                  <span className="text-sm">Offline Devices:</span>
+                </div>
+                <span className="text-2xl font-bold">45</span>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Application Health Summary */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Application health summary</CardTitle>
+            <LayoutGrid className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-green-600">
+                <div className="flex items-center gap-2">
+                  <Circle className="w-4 h-4 fill-current" />
+                  <span className="text-sm">Active Applications:</span>
+                </div>
+                <span className="text-2xl font-bold">825</span>
+              </div>
+              <div className="flex items-center justify-between text-red-600">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Down Applications:</span>
+                </div>
+                <span className="text-2xl font-bold">5</span>
+              </div>
+              <div className="flex items-center justify-between text-yellow-600">
+                <div className="flex items-center gap-2">
+                  <RefreshCcw className="w-4 h-4" />
+                  <span className="text-sm">Maintenance:</span>
+                </div>
+                <span className="text-2xl font-bold">2</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Alerts & Notifications */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium">Alerts & notifications</CardTitle>
+            <Activity className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Total Alerts:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold">10</span>
+                  <Badge>New</Badge>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-red-600">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">Critical Alerts:</span>
+                </div>
+                <span className="text-2xl font-bold">3</span>
+              </div>
+              <div className="flex items-center justify-between text-green-600">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-sm">Resolved Alerts:</span>
+                </div>
+                <span className="text-2xl font-bold">7</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-4">
+        <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Map</h2>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Live View</span>
+            </div>
           </div>
+          <div className="aspect-[16/9] bg-sky-100 rounded-lg"></div>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Legend</CardTitle>
+            <CardDescription>Map indicators</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <span className="text-sm">Selected cluster</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <span className="text-sm">Online</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                <span className="text-sm">Errors</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <span className="text-sm">Offline</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      {/* Activity Log Section */}
-      <div className="mt-8">
-        <h2 className="text-xl font-bold mb-4">Activity Log</h2>
-        <div className="bg-gray-300 p-4 rounded shadow h-48"> {/* Height can be adjusted as needed */}
-          {/* Placeholder content */}
-          <p>No activity logs available at the moment.</p>
-        </div>
-      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity Log</CardTitle>
+          <CardDescription>Recent system activities</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <Activity className="w-4 h-4" />
+            <AlertTitle>No Activity</AlertTitle>
+            <AlertDescription>
+              No activity logs available at the moment.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }
