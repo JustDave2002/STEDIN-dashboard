@@ -6,23 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import "leaflet/dist/leaflet.css";
 import { stedinGeojson } from "@/data/stedinGeojson"; // Your GeoJSON data
 
-// Sample data structure for province status
-const provinceData = {
+// Sample data structure for region status
+const regionData = {
   "Noord-Beveland": {
     status: "online",
     devices: 5000,
     errors: 25,
     offline: 100,
   },
-  // Add data for other provinces
+  // Add data for other regions
 };
 
 /**
- * Get the color for a province based on its status
- * @param {string} status - The status of the province
+ * Get the color for a region based on its status
+ * @param {string} status - The status of the region
  * @returns {string} - Color in CSS format
  */
-const getProvinceColor = (status) => {
+const getRegionColor = (status) => {
   switch (status) {
     case "selected":
       return "rgba(96, 165, 250, 0.5)"; // blue-400 with 50% opacity
@@ -38,7 +38,7 @@ const getProvinceColor = (status) => {
 };
 
 export default function InteractiveMap() {
-  const [selectedProvince, setSelectedProvince] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState(null);
 
   useEffect(() => {
     // Ensure Leaflet map is properly reset
@@ -46,13 +46,13 @@ export default function InteractiveMap() {
     if (mapInstance) mapInstance._leaflet_id = null;
   }, []);
 
-  // Styling each feature on the map based on the province status
+  // Styling each feature on the map based on the region status
   const onEachFeature = (feature, layer) => {
-    const provinceName = feature.properties.name;
-    const provinceInfo = provinceData[provinceName] || { status: "offline" };
+    const regionName = feature.properties.name;
+    const regionInfo = regionData[regionName] || { status: "offline" };
 
     layer.setStyle({
-      fillColor: getProvinceColor(provinceInfo.status),
+      fillColor: getRegionColor(regionInfo.status),
       fillOpacity: 0.5,
       color: "#FFFFFF",
       weight: 1,
@@ -60,7 +60,7 @@ export default function InteractiveMap() {
 
     layer.on({
       click: () => {
-        setSelectedProvince(provinceName);
+        setSelectedRegion(regionName);
       },
       mouseover: (e) => {
         e.target.setStyle({
@@ -77,10 +77,15 @@ export default function InteractiveMap() {
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
+      <style>{`
+        .leaflet-container {
+          pointer-events: auto;
+        }
+      `}</style>
       <div className="col-span-3">
         <Card>
           <CardHeader>
-            <CardTitle>Province Map</CardTitle>
+            <CardTitle>Map</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="relative aspect-[4/3] border border-gray-200 rounded-lg overflow-hidden">
@@ -127,21 +132,21 @@ export default function InteractiveMap() {
           </CardContent>
         </Card>
 
-        {selectedProvince && provinceData[selectedProvince] && (
+        {selectedRegion && regionData[selectedRegion] && (
           <Card>
             <CardHeader>
-              <CardTitle>Selected Province</CardTitle>
+              <CardTitle>Selected Region</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <p className="text-sm font-medium">{selectedProvince}</p>
+                <p className="text-sm font-medium">{selectedRegion}</p>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <span className="text-muted-foreground">Devices:</span>
-                  <span>{provinceData[selectedProvince].devices}</span>
+                  <span>{regionData[selectedRegion].devices}</span>
                   <span className="text-muted-foreground">Errors:</span>
-                  <span>{provinceData[selectedProvince].errors}</span>
+                  <span>{regionData[selectedRegion].errors}</span>
                   <span className="text-muted-foreground">Offline:</span>
-                  <span>{provinceData[selectedProvince].offline}</span>
+                  <span>{regionData[selectedRegion].offline}</span>
                 </div>
               </div>
             </CardContent>

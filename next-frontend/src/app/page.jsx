@@ -123,42 +123,10 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Map</h2>
-          </div>
-          <div className="aspect-[16/9] bg-sky-100 rounded-lg">
-          <DynamicMap />
-          </div>
+      <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
+        <div className="aspect-[16/9] bg-sky-100 rounded-lg">
+        <DynamicMap />
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Legend</CardTitle>
-            <CardDescription>Map indicators</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                <span className="text-sm">Selected cluster</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <span className="text-sm">Online</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                <span className="text-sm">Errors</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <span className="text-sm">Offline</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
       <Card>
         <CardHeader>
