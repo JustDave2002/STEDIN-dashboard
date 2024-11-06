@@ -14,12 +14,11 @@ import {
   Circle,
   Laptop,
   LayoutGrid,
-  MapPin,
   MonitorOff,
   MonitorPlay,
   RefreshCcw,
 } from "lucide-react"
-import Map from "@/components/map";
+import DynamicMap from "@/components/DynamicMap";
 
 export default function Dashboard() {
   return (
@@ -128,12 +127,10 @@ export default function Dashboard() {
         <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Map</h2>
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Live View</span>
-            </div>
           </div>
-          <div className="aspect-[16/9] bg-sky-100 rounded-lg"></div>
+          <div className="aspect-[16/9] bg-sky-100 rounded-lg">
+          <DynamicMap />
+          </div>
         </div>
 
         <Card>
@@ -163,7 +160,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
       <Card>
         <CardHeader>
           <CardTitle>Activity Log</CardTitle>
