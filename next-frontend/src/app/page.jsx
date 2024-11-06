@@ -124,7 +124,7 @@ export default function Dashboard() {
       </div>
 
       <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
-        <div className="aspect-[16/9] bg-sky-100 rounded-lg">
+        <div className="aspect-[9/4] bg-sky-100 rounded-lg">
         <DynamicMap />
         </div>
       </div>

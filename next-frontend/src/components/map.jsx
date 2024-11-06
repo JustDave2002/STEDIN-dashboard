@@ -1,12 +1,9 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import "leaflet/dist/leaflet.css";
 import { stedinGeojson } from "@/data/stedinGeojson"; // Your GeoJSON data
 
-// Sample data structure for region status
 const regionData = {
   "Noord-Beveland": {
     status: "online",
@@ -14,14 +11,9 @@ const regionData = {
     errors: 25,
     offline: 100,
   },
-  // Add data for other regions
+  // Add other regions here
 };
 
-/**
- * Get the color for a region based on its status
- * @param {string} status - The status of the region
- * @returns {string} - Color in CSS format
- */
 const getRegionColor = (status) => {
   switch (status) {
     case "selected":
@@ -40,23 +32,21 @@ const getRegionColor = (status) => {
 export default function InteractiveMap() {
   const [selectedRegion, setSelectedRegion] = useState(null);
 
-  useEffect(() => {
-    // Ensure Leaflet map is properly reset
-    const mapInstance = document.querySelector(".leaflet-container");
-    if (mapInstance) mapInstance._leaflet_id = null;
-  }, []);
-
-  // Styling each feature on the map based on the region status
-  const onEachFeature = (feature, layer) => {
+  const style = (feature) => {
     const regionName = feature.properties.name;
     const regionInfo = regionData[regionName] || { status: "offline" };
+    const isSelected = selectedRegion === regionName;
 
-    layer.setStyle({
-      fillColor: getRegionColor(regionInfo.status),
+    return {
+      fillColor: getRegionColor(isSelected ? "selected" : regionInfo.status),
       fillOpacity: 0.5,
       color: "#FFFFFF",
       weight: 1,
-    });
+    };
+  };
+
+  const onEachFeature = (feature, layer) => {
+    const regionName = feature.properties.name;
 
     layer.on({
       click: () => {
@@ -77,28 +67,29 @@ export default function InteractiveMap() {
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
-      <style>{`
-        .leaflet-container {
-          pointer-events: auto;
-        }
-      `}</style>
       <div className="col-span-3">
         <Card>
           <CardHeader>
             <CardTitle>Map</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="relative aspect-[4/3] border border-gray-200 rounded-lg overflow-hidden">
+            <div className="relative aspect-[5/3] border border-gray-200 rounded-lg overflow-hidden">
               <MapContainer
-                center={[52.1326, 5.2913]}
-                zoom={7}
+                center={[51.7, 4.4]}
+                zoom={9}
                 style={{ height: "100%", width: "100%" }}
+                scrollWheelZoom={true}
+                dragging={true}
               >
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
-                <GeoJSON data={stedinGeojson} onEachFeature={onEachFeature} />
+                <GeoJSON
+                  data={stedinGeojson}
+                  style={style}
+                  onEachFeature={onEachFeature}
+                />
               </MapContainer>
             </div>
           </CardContent>
