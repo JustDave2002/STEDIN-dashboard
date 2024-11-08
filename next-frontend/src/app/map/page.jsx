@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
-import { Slider } from "@/components/ui/slider"
+import { Button } from "@/components/ui/button"
 
 export default function MapPage() {
   const [geoLevel, setGeoLevel] = useState(0);
@@ -28,9 +28,8 @@ export default function MapPage() {
     }));
   };
 
-  const handleGeoLevelChange = (value) => {
-    setGeoLevel(value[0]); // Slider returns an array, so we take the first value
-    console.log(value[0]);
+  const handleGeoLevelChange = (level) => {
+    setGeoLevel(level);
   };
 
   return (
@@ -83,15 +82,20 @@ export default function MapPage() {
             <div className="flex flex-col space-y-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
-                  <span className="text-sm text-muted-foreground">Detail level</span>
-                  <div className="w-[200px]">
-                    <Slider
-                      value={[geoLevel]}
-                      onValueChange={handleGeoLevelChange}
-                      max={1}
-                      step={1}
-                      className="[&_[role=slider]]:bg-yellow-400"
-                    />
+                  <span className="text-sm text-muted-foreground">Detail level:</span>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant={geoLevel === 0 ? "default" : "outline"}
+                      onClick={() => handleGeoLevelChange(0)}
+                    >
+                      High Level
+                    </Button>
+                    <Button
+                      variant={geoLevel === 1 ? "default" : "outline"}
+                      onClick={() => handleGeoLevelChange(1)}
+                    >
+                      Low Level
+                    </Button>
                   </div>
                 </div>
               </div>
