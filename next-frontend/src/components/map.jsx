@@ -1,17 +1,58 @@
-import { useState } from "react";
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+"use client"
+
+import { useState, useEffect, useCallback } from "react";
+import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import "leaflet/dist/leaflet.css";
-import { stedinGeojson } from "@/data/stedinGeojson"; // Your GeoJSON data
+
+// Import different GeoJSON data
+import { stedinGeojson } from "@/data/stedinGeojson";
+import { lowLevelGeojson } from "@/data/lowLevelGeojson";
 
 const regionData = {
   "Noord-Beveland": {
+    status: "online",
+    devices: 3000,
+    errors: 21,
+    offline: 60,
+  },
+  "Middelburg": {
     status: "online",
     devices: 5000,
     errors: 25,
     offline: 100,
   },
-  // Add other regions here
+  "Vlissingen": {
+    status: "online",
+    devices: 4000,
+    errors: 20,
+  },
+  "Schouwen-Duiveland": {
+    status: "online",
+    devices: 1000,
+    errors: 5,
+    offline: 10,
+  },
+  "Veere": {
+    status: "online",
+    devices: 1000,
+    errors: 5,
+    offline: 10,
+  },
+  "Goes": {
+    status: "online",
+    devices: 1000,
+    errors: 5,
+    offline: 10,
+  },
+  "Borsele": {
+    status: "online",
+    devices: 1000,
+    errors: 5,
+    offline: 10,
+  },
 };
 
 const getRegionColor = (status) => {
@@ -29,13 +70,49 @@ const getRegionColor = (status) => {
   }
 };
 
-export default function InteractiveMap() {
-  const [selectedRegion, setSelectedRegion] = useState(null);
+function MapContent({ geoLevel, style, onEachFeature }) {
+  const map = useMap();
+  const [currentGeoJson, setCurrentGeoJson] = useState(null);
 
-  const style = (feature) => {
+  useEffect(() => {
+    const geoData = geoLevel === 0 ? stedinGeojson : lowLevelGeojson;
+    setCurrentGeoJson(geoData);
+  }, [geoLevel]);
+
+  useEffect(() => {
+    if (currentGeoJson) {
+      map.fitBounds(L.geoJSON(currentGeoJson).getBounds());
+    }
+  }, [currentGeoJson, map]);
+
+  if (!currentGeoJson) return null;
+
+  return (
+    <GeoJSON key={geoLevel} data={currentGeoJson} style={style} onEachFeature={onEachFeature} />
+  );
+}
+
+export default function InteractiveMap({ geoLevel = 0, filters }) {
+  const [selectedRegions, setSelectedRegions] = useState([]);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [geoJsonKey, setGeoJsonKey] = useState(0);
+
+  useEffect(() => {
+    // Clear selected regions when changing geoLevel
+    setSelectedRegions([]);
+    // Increment geoJsonKey to force re-render of GeoJSON
+    setGeoJsonKey(prev => prev + 1);
+  }, [geoLevel]);
+
+  useEffect(() => {
+    // Increment geoJsonKey to force re-render of GeoJSON when multi-select changes
+    setGeoJsonKey(prev => prev + 1);
+  }, [isMultiSelect]);
+
+  const style = useCallback((feature) => {
     const regionName = feature.properties.name;
     const regionInfo = regionData[regionName] || { status: "offline" };
-    const isSelected = selectedRegion === regionName;
+    const isSelected = selectedRegions.includes(regionName);
 
     return {
       fillColor: getRegionColor(isSelected ? "selected" : regionInfo.status),
@@ -43,14 +120,22 @@ export default function InteractiveMap() {
       color: "#FFFFFF",
       weight: 1,
     };
-  };
+  }, [selectedRegions]);
 
-  const onEachFeature = (feature, layer) => {
+  const onEachFeature = useCallback((feature, layer) => {
     const regionName = feature.properties.name;
 
     layer.on({
       click: () => {
-        setSelectedRegion(regionName);
+        if (isMultiSelect) {
+          setSelectedRegions((prev) =>
+            prev.includes(regionName)
+              ? prev.filter((r) => r !== regionName)
+              : [...prev, regionName]
+          );
+        } else {
+          setSelectedRegions([regionName]);
+        }
       },
       mouseover: (e) => {
         e.target.setStyle({
@@ -63,7 +148,7 @@ export default function InteractiveMap() {
         });
       },
     });
-  };
+  }, [isMultiSelect]);
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
@@ -73,6 +158,21 @@ export default function InteractiveMap() {
             <CardTitle>Map</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 flex items-center space-x-2">
+              <Switch
+                id="multi-select"
+                checked={isMultiSelect}
+                onCheckedChange={(checked) => {
+                  setIsMultiSelect(checked);
+                  if (!checked) {
+                    setSelectedRegions([]);
+                  }
+                }}
+              />
+              <Label htmlFor="multi-select">
+                {isMultiSelect ? "Multi-select mode" : "Single-select mode"}
+              </Label>
+            </div>
             <div className="relative aspect-[5/3] border border-gray-200 rounded-lg overflow-hidden">
               <MapContainer
                 center={[51.7, 4.4]}
@@ -85,11 +185,7 @@ export default function InteractiveMap() {
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
-                <GeoJSON
-                  data={stedinGeojson}
-                  style={style}
-                  onEachFeature={onEachFeature}
-                />
+                <MapContent key={geoJsonKey} geoLevel={geoLevel} style={style} onEachFeature={onEachFeature} />
               </MapContainer>
             </div>
           </CardContent>
@@ -123,26 +219,34 @@ export default function InteractiveMap() {
           </CardContent>
         </Card>
 
-        {selectedRegion && regionData[selectedRegion] && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Selected Region</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">{selectedRegion}</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">Devices:</span>
-                  <span>{regionData[selectedRegion].devices}</span>
-                  <span className="text-muted-foreground">Errors:</span>
-                  <span>{regionData[selectedRegion].errors}</span>
-                  <span className="text-muted-foreground">Offline:</span>
-                  <span>{regionData[selectedRegion].offline}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>Selected Region{selectedRegions.length > 1 && "s"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-[500px] overflow-y-auto pr-2">
+              {selectedRegions.length > 0 ? (
+                selectedRegions.map((region) => (
+                  regionData[region] && (
+                    <div key={region} className="space-y-2 mb-4">
+                      <p className="text-sm font-medium">{region}</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Devices:</span>
+                        <span>{regionData[region].devices}</span>
+                        <span className="text-muted-foreground">Errors:</span>
+                        <span>{regionData[region].errors}</span>
+                        <span className="text-muted-foreground">Offline:</span>
+                        <span>{regionData[region].offline}</span>
+                      </div>
+                    </div>
+                  )
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No region selected</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

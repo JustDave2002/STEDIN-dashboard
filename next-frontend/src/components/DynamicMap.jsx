@@ -8,10 +8,10 @@ const MapComponent = dynamic(() => import('./map'), {
   loading: () => <div>Loading map...</div>
 })
 
-export default function DynamicMap() {
+export default function DynamicMap({ geoLevel, filters }) {
   return (
     <Suspense fallback={<div>Loading map...</div>}>
-      <MapComponent />
+      <MapComponent geoLevel={geoLevel} filters={filters} />
     </Suspense>
   )
 }
