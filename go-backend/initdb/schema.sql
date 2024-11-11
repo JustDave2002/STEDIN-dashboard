@@ -1,4 +1,5 @@
-CREATE TABLE roles (
+CREATE TABLE
+    roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
@@ -6,22 +7,8 @@ CREATE TABLE roles (
     is_restricted BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE tags (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    type ENUM('location', 'team', 'other') NOT NULL,
-    is_editable BOOLEAN DEFAULT TRUE
-);
-
-CREATE TABLE role_tags (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    tag_id INT,
-    role_id INT,
-    FOREIGN KEY (tag_id) REFERENCES tags(id),
-    FOREIGN KEY (role_id) REFERENCES roles(id)
-);
-
-CREATE TABLE edge_devices (
+CREATE TABLE
+    edge_devices (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     status ENUM('online', 'offline', 'error', 'app_issue') NOT NULL,
@@ -32,7 +19,33 @@ CREATE TABLE edge_devices (
     performance_metric DECIMAL(5, 2) -- Placeholder for performance metric, adjust as needed
 );
 
-CREATE TABLE device_tags (
+CREATE TABLE
+    mebers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+    );
+
+CREATE TABLE
+    tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type ENUM('location', 'team', 'custom', 'other') NOT NULL,
+    is_editable BOOLEAN DEFAULT TRUE,
+    owner_id INT DEFAULT NULL,
+    FOREIGN KEY (owner_id) REFERENCES mebers(id)
+);
+
+CREATE TABLE
+    role_tags (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tag_id INT,
+    role_id INT,
+    FOREIGN KEY (tag_id) REFERENCES tags(id),
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+CREATE TABLE
+    device_tags (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tag_id INT,
     device_id INT,
@@ -40,7 +53,26 @@ CREATE TABLE device_tags (
     FOREIGN KEY (device_id) REFERENCES edge_devices(id)
 );
 
-CREATE TABLE applications (
+CREATE TABLE
+    meber_roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    meber_id INT,
+    role_id INT,
+    FOREIGN KEY (meber_id) REFERENCES mebers(id),
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+# CREATE TABLE
+# meber_tags (
+#     id INT AUTO_INCREMENT PRIMARY KEY,
+#     meber_id INT,
+#     tag_id INT,
+#     FOREIGN KEY (meber_id) REFERENCES mebers(id),
+#     FOREIGN KEY (tag_id) REFERENCES tags(id)
+# );
+
+CREATE TABLE
+    applications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     version VARCHAR(10) NOT NULL,
@@ -48,7 +80,17 @@ CREATE TABLE applications (
     repo_url VARCHAR(255)
 );
 
-CREATE TABLE application_instances (
+CREATE TABLE
+    meber_applications (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    meber_id INT,
+    application_id INT,
+    FOREIGN KEY (meber_id) REFERENCES mebers(id),
+    FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+
+CREATE TABLE
+    application_instances (
     id INT AUTO_INCREMENT PRIMARY KEY,
     app_id INT,
     device_id INT,
@@ -58,13 +100,15 @@ CREATE TABLE application_instances (
     FOREIGN KEY (device_id) REFERENCES edge_devices(id)
 );
 
-CREATE TABLE sensors (
+CREATE TABLE
+    sensors (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT
 );
 
-CREATE TABLE device_sensors (
+CREATE TABLE
+    device_sensors (
     id INT AUTO_INCREMENT PRIMARY KEY,
     sensor_id INT,
     device_id INT,
@@ -72,7 +116,8 @@ CREATE TABLE device_sensors (
     FOREIGN KEY (device_id) REFERENCES edge_devices(id)
 );
 
-CREATE TABLE application_sensors (
+CREATE TABLE
+    application_sensors (
     id INT AUTO_INCREMENT PRIMARY KEY,
     sensor_id INT,
     application_id INT,
@@ -80,13 +125,14 @@ CREATE TABLE application_sensors (
     FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 
-CREATE TABLE logs (
+CREATE TABLE
+    logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     device_id INT,
-    app_id INT NULL,
+    app_instance_id INT NULL,
     description TEXT NOT NULL,
     warning_level ENUM('online', 'offline', 'error', 'app_issue', 'warning') NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (device_id) REFERENCES edge_devices(id),
-    FOREIGN KEY (app_id) REFERENCES applications(id)
+    FOREIGN KEY (app_instance_id) REFERENCES application_instances(id)
 );
