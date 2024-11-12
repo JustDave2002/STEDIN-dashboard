@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
@@ -10,9 +10,8 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 
-// Import different GeoJSON data
+// Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/stedinGeojson";
-import { lowLevelGeojson } from "@/data/lowLevelGeojson";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -81,12 +80,40 @@ const getRegionColor = (regionData) => {
 
 function MapContent({ geoLevel, onItemClick, selectedItems }) {
   const map = useMap();
+  const [lowLevelData, setLowLevelData] = useState(null);
+
+  // Fetch low-level data
+  useEffect(() => {
+    if (geoLevel === 1) {
+      const fetchLowLevelData = async () => {
+        try {
+          const response = await fetch('http://localhost:8000/map');
+          if (response.ok) {
+            const data = await response.json();
+            setLowLevelData(data); // Store fetched data
+          } else {
+            console.error('Failed to fetch low-level data');
+          }
+        } catch (error) {
+          console.error('Error fetching low-level data:', error);
+        }
+      };
+      fetchLowLevelData();
+    }
+  }, [geoLevel]);
 
   useEffect(() => {
-    const geoData = geoLevel === 0 ? stedinGeojson : lowLevelGeojson;
-    const bounds = L.geoJSON(geoData).getBounds();
-    map.fitBounds(bounds);
-  }, [geoLevel, map]);
+    if (geoLevel === 0) return;
+
+    const geoData = geoLevel === 0 ? stedinGeojson : lowLevelData;
+
+    if (geoData && map) {
+      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.longitude, feature.latitude]));
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50] }); // Adding padding for visibility
+      }
+    }
+  }, [geoLevel, map, lowLevelData]);
 
   if (geoLevel === 0) {
     return (
@@ -111,30 +138,31 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
       />
     );
   } else {
-    const markers = lowLevelGeojson.features.map((feature) => {
-      const { coordinates } = feature.geometry;
-      const isSelected = selectedItems.some(item => 
-        (typeof item === 'string' && item === feature.properties.Naam) || 
-        (typeof item === 'object' && item.name === feature.properties.Naam)
+    if (!lowLevelData) {
+      return <div>Loading low-level data...</div>;
+    }
+
+    const markers = lowLevelData.map((feature) => {
+      const { latitude, longitude, name, status, municipality } = feature;
+
+      const isSelected = selectedItems.some(item =>
+        (typeof item === 'string' && item === name) ||
+        (typeof item === 'object' && item.name === name)
       );
-      const status = feature.properties.Status.toLowerCase();
 
-      let icon;
-      if (isSelected) {
-        icon = SelectedIcon;
-      } else if (status === "online") {
-        icon = OnlineIcon;
-      } else {
-        icon = OfflineIcon;
-      }
+      let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
 
-      return L.marker([coordinates[1], coordinates[0]], { icon })
-        .bindPopup(feature.properties.Naam)
-        .on('click', () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status));
+      // TODO omgedraaide latitude, longtitude
+      return L.marker([longitude, latitude], { icon })
+        .bindPopup(name)
+        .on('click', () => onItemClick(name, municipality, status));
     });
 
+    // Filter out null markers and log their count
+    const validMarkers = markers.filter(marker => marker !== null);
+
     const markerClusterGroup = L.markerClusterGroup();
-    markerClusterGroup.addLayers(markers);
+    markerClusterGroup.addLayers(validMarkers);
     map.addLayer(markerClusterGroup);
 
     return null;
