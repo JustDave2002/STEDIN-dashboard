@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-faker/faker/v4"
@@ -20,6 +21,7 @@ const (
 	numLogs         = 5000
 	numApplications = 4
 	seedFilePath    = "seed.sql"
+	maxWorkers      = 50
 )
 
 var municipalities []string
@@ -67,17 +69,45 @@ func main() {
 
 	SeedMunicipalityData(db, municipalities)
 
-	for i := 0; i < numDevices; i++ {
-		seedEdgeDevice(db, i)
-		fmt.Println("Finished seeding device ", i)
-	}
+	concurrentSeeder(db, 0, numDevices)
 	log.Println("Finished seeding edge devices")
 
-	for i := 0; i < numLogs; i++ {
-		seedLog(db)
-		fmt.Println("Finished seeding log ", i)
-	}
+	concurrentSeeder(db, 1, numLogs)
 	log.Println("Finished seeding logs")
+}
+func concurrentSeeder(db *sql.DB, function int, iterations int) {
+	var wg sync.WaitGroup // WaitGroup to manage Goroutines
+
+	// Create a buffered channel to control concurrency (5 workers)
+	workerChannel := make(chan struct{}, maxWorkers)
+
+	for i := 1; i <= iterations; i++ {
+		wg.Add(1)
+
+		// Launch a Goroutine for each seeding task
+		go func(index int) {
+			defer wg.Done()
+
+			// Block if there are already `maxWorkers` workers
+			workerChannel <- struct{}{}
+
+			// Print sending request
+			//fmt.Printf("Worker doing things")
+
+			if function == 0 {
+				seedEdgeDevice(db, i)
+				fmt.Println("Finished seeding device ", i)
+			} else if function == 1 {
+				seedLog(db)
+				fmt.Println("Finished seeding log ", i)
+			}
+
+			<-workerChannel // Release the worker (decrement)
+		}(i)
+	}
+
+	wg.Wait() // Wait for all Goroutines to complete
+	println("Finished concurrency")
 }
 
 // Function to empty all tables and execute seed.sql
@@ -140,7 +170,7 @@ func executeSQLFile(db *sql.DB) error {
 }
 
 func seedEdgeDevice(db *sql.DB, index int) {
-	name := faker.Username() + "_" + fmt.Sprint(index)
+	name := "MSR" + "_" + fmt.Sprint(index)
 	status := weightedStatus()
 	connectionType := randomConnectionType()
 	municipality := municipalities[rand.Intn(len(municipalities))]
@@ -149,8 +179,8 @@ func seedEdgeDevice(db *sql.DB, index int) {
 	performanceMetric := randomPerformanceMetric(status)
 	lastContact := randomTimestamp()
 
-	query := `INSERT INTO edge_devices (name, status, last_contact, connection_type, coordinates, ip_address, performance_metric)
-	VALUES (?, ?, ?, ?, POINT(?, ?), ?, ?)`
+	query := `INSERT INTO edge_devices ( name, status, last_contact, connection_type, coordinates, ip_address, performance_metric)
+	VALUES ( ?, ?, ?, ?, POINT(?, ?), ?, ?)`
 
 	res, err := db.Exec(query, name, status, lastContact, connectionType, coordinates.lat, coordinates.lon, ipAddress, performanceMetric)
 	if err != nil {
