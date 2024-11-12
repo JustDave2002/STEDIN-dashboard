@@ -1,154 +1,197 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 
 // Import different GeoJSON data
 import { stedinGeojson } from "@/data/stedinGeojson";
 import { lowLevelGeojson } from "@/data/lowLevelGeojson";
 
+// Create custom icons for markers
+const createCustomIcon = (imageName) => L.icon({
+  iconUrl: `/images/${imageName}`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -12],
+});
+
+const OnlineIcon = createCustomIcon('green_marker.png');
+const SelectedIcon = createCustomIcon('blue_marker.png');
+const OfflineIcon = createCustomIcon('red_marker.png');
+
+L.Marker.prototype.options.icon = OnlineIcon;
+
 const regionData = {
-  "Noord-Beveland": {
-    status: "online",
-    devices: 3000,
-    errors: 21,
-    offline: 60,
-  },
   "Middelburg": {
-    status: "online",
-    devices: 5000,
-    errors: 25,
-    offline: 100,
+    devices: 4,
+    online: 4,
+    errors: 0,
+    offline: 0,
   },
   "Vlissingen": {
-    status: "online",
-    devices: 4000,
-    errors: 20,
-  },
-  "Schouwen-Duiveland": {
-    status: "online",
-    devices: 1000,
-    errors: 5,
-    offline: 10,
-  },
-  "Veere": {
-    status: "online",
-    devices: 1000,
-    errors: 5,
-    offline: 10,
+    devices: 2,
+    online: 1,
+    errors: 0,
+    offline: 1,
   },
   "Goes": {
-    status: "online",
-    devices: 1000,
-    errors: 5,
-    offline: 10,
+    devices: 3,
+    online: 3,
+    errors: 0,
+    offline: 0,
+  },
+  "Noord-Beveland": {
+    devices: 1,
+    online: 1,
+    errors: 0,
+    offline: 0,
+  },
+  "Veere": {
+    devices: 1,
+    online: 1,
+    errors: 0,
+    offline: 0,
   },
   "Borsele": {
-    status: "online",
-    devices: 1000,
-    errors: 5,
-    offline: 10,
+    devices: 1,
+    online: 1,
+    errors: 0,
+    offline: 0,
   },
 };
 
-const getRegionColor = (status) => {
-  switch (status) {
-    case "selected":
-      return "rgba(96, 165, 250, 0.5)"; // blue-400 with 50% opacity
-    case "online":
-      return "rgba(74, 222, 128, 0.5)"; // green-400 with 50% opacity
-    case "error":
-      return "rgba(251, 146, 60, 0.5)"; // orange-400 with 50% opacity
-    case "offline":
-      return "rgba(248, 113, 113, 0.5)"; // red-400 with 50% opacity
-    default:
-      return "rgba(229, 231, 235, 0.5)"; // gray-200 with 50% opacity
-  }
+const getRegionColor = (regionData) => {
+  if (!regionData) return "rgba(229, 231, 235, 0.5)"; // default color
+  
+  const { devices, errors, offline } = regionData;
+  const total = devices + errors + offline;
+
+  if (offline === total) return "rgba(248, 113, 113, 0.5)"; // all offline
+  if (errors > 0) return "rgba(251, 146, 60, 0.5)"; // has errors
+  if (offline > 0) return "rgba(251, 189, 35, 0.5)"; // some offline
+  return "rgba(74, 222, 128, 0.5)"; // all online
 };
 
-function MapContent({ geoLevel, style, onEachFeature }) {
+function MapContent({ geoLevel, onItemClick, selectedItems }) {
   const map = useMap();
-  const [currentGeoJson, setCurrentGeoJson] = useState(null);
 
   useEffect(() => {
     const geoData = geoLevel === 0 ? stedinGeojson : lowLevelGeojson;
-    setCurrentGeoJson(geoData);
-  }, [geoLevel]);
+    const bounds = L.geoJSON(geoData).getBounds();
+    map.fitBounds(bounds);
+  }, [geoLevel, map]);
 
-  useEffect(() => {
-    if (currentGeoJson) {
-      map.fitBounds(L.geoJSON(currentGeoJson).getBounds());
-    }
-  }, [currentGeoJson, map]);
+  if (geoLevel === 0) {
+    return (
+      <GeoJSON
+        key="high-level"
+        data={stedinGeojson}
+        style={(feature) => {
+          const regionName = feature.properties.name;
+          const isSelected = selectedItems.includes(regionName);
+          return {
+            fillColor: isSelected ? "rgba(96, 165, 250, 0.5)" : getRegionColor(regionData[regionName]),
+            fillOpacity: 0.5,
+            color: "#FFFFFF",
+            weight: 1,
+          };
+        }}
+        onEachFeature={(feature, layer) => {
+          layer.on({
+            click: () => onItemClick(feature.properties.name),
+          });
+        }}
+      />
+    );
+  } else {
+    return lowLevelGeojson.features.map((feature) => {
+      const { coordinates } = feature.geometry;
+      const isSelected = selectedItems.some(item => 
+        (typeof item === 'string' && item === feature.properties.Naam) || 
+        (typeof item === 'object' && item.name === feature.properties.Naam)
+      );
+      const status = feature.properties.Status.toLowerCase();
 
-  if (!currentGeoJson) return null;
+      let icon;
+      if (isSelected) {
+        icon = SelectedIcon;
+      } else if (status === "online") {
+        icon = OnlineIcon;
+      } else {
+        icon = OfflineIcon;
+      }
 
-  return (
-    <GeoJSON key={geoLevel} data={currentGeoJson} style={style} onEachFeature={onEachFeature} />
-  );
+      return (
+        <Marker
+          key={feature.id}
+          position={[coordinates[1], coordinates[0]]}
+          icon={icon}
+          eventHandlers={{
+            click: () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status),
+          }}
+        >
+          <Popup>{feature.properties.Naam}</Popup>
+        </Marker>
+      );
+    });
+  }
 }
 
 export default function InteractiveMap({ geoLevel = 0, filters }) {
-  const [selectedRegions, setSelectedRegions] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
-  const [geoJsonKey, setGeoJsonKey] = useState(0);
+  const [mapKey, setMapKey] = useState(0);
 
   useEffect(() => {
-    // Clear selected regions when changing geoLevel
-    setSelectedRegions([]);
-    // Increment geoJsonKey to force re-render of GeoJSON
-    setGeoJsonKey(prev => prev + 1);
+    setSelectedItems([]);
+    setMapKey(prev => prev + 1);
   }, [geoLevel]);
 
   useEffect(() => {
-    // Increment geoJsonKey to force re-render of GeoJSON when multi-select changes
-    setGeoJsonKey(prev => prev + 1);
+    setMapKey(prev => prev + 1);
   }, [isMultiSelect]);
 
-  const style = useCallback((feature) => {
-    const regionName = feature.properties.name;
-    const regionInfo = regionData[regionName] || { status: "offline" };
-    const isSelected = selectedRegions.includes(regionName);
+  const handleItemClick = useCallback((itemName, gemeente, status) => {
+    if (geoLevel === 0) {
+      // High-level view: select regions
+      if (isMultiSelect) {
+        setSelectedItems((prev) =>
+          prev.includes(itemName)
+            ? prev.filter((r) => r !== itemName)
+            : [...prev, itemName]
+        );
+      } else {
+        setSelectedItems([itemName]);
+      }
+    } else {
+      // Low-level view: select markers
+      if (isMultiSelect) {
+        setSelectedItems((prev) =>
+          prev.some(item => (typeof item === 'string' && item === itemName) || (typeof item === 'object' && item.name === itemName))
+            ? prev.filter((item) => (typeof item === 'string' && item !== itemName) || (typeof item === 'object' && item.name !== itemName))
+            : [...prev, { name: itemName, status: status }]
+        );
+      } else {
+        setSelectedItems([{ name: itemName, status: status }]);
+      }
+    }
+  }, [isMultiSelect, geoLevel]);
 
-    return {
-      fillColor: getRegionColor(isSelected ? "selected" : regionInfo.status),
-      fillOpacity: 0.5,
-      color: "#FFFFFF",
-      weight: 1,
-    };
-  }, [selectedRegions]);
-
-  const onEachFeature = useCallback((feature, layer) => {
-    const regionName = feature.properties.name;
-
-    layer.on({
-      click: () => {
-        if (isMultiSelect) {
-          setSelectedRegions((prev) =>
-            prev.includes(regionName)
-              ? prev.filter((r) => r !== regionName)
-              : [...prev, regionName]
-          );
-        } else {
-          setSelectedRegions([regionName]);
-        }
-      },
-      mouseover: (e) => {
-        e.target.setStyle({
-          fillOpacity: 0.7,
-        });
-      },
-      mouseout: (e) => {
-        e.target.setStyle({
-          fillOpacity: 0.5,
-        });
-      },
-    });
-  }, [isMultiSelect]);
+  const getStatusColor = (status) => {
+    switch (status.toLowerCase()) {
+      case "online":
+        return "text-green-500";
+      case "offline":
+        return "text-red-500";
+      default:
+        return "text-gray-500";
+    }
+  };
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
@@ -165,7 +208,7 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
                 onCheckedChange={(checked) => {
                   setIsMultiSelect(checked);
                   if (!checked) {
-                    setSelectedRegions([]);
+                    setSelectedItems([]);
                   }
                 }}
               />
@@ -175,17 +218,21 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
             </div>
             <div className="relative aspect-[5/3] border border-gray-200 rounded-lg overflow-hidden">
               <MapContainer
-                center={[51.7, 4.4]}
+                key={mapKey}
+                center={[51.5, 3.8]}
                 zoom={9}
                 style={{ height: "100%", width: "100%" }}
                 scrollWheelZoom={true}
-                dragging={true}
               >
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
-                <MapContent key={geoJsonKey} geoLevel={geoLevel} style={style} onEachFeature={onEachFeature} />
+                <MapContent 
+                  geoLevel={geoLevel} 
+                  onItemClick={handleItemClick}
+                  selectedItems={selectedItems}
+                />
               </MapContainer>
             </div>
           </CardContent>
@@ -199,50 +246,85 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-400 opacity-70" />
-                <span className="text-sm">Selected cluster</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-400 opacity-70" />
-                <span className="text-sm">Online</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-orange-400 opacity-70" />
-                <span className="text-sm">Errors</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-400 opacity-70" />
-                <span className="text-sm">Offline</span>
-              </div>
+              {geoLevel === 0 && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-400 opacity-70" />
+                    <span className="text-sm">Selected Region</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-400 opacity-70" />
+                    <span className="text-sm">All Devices Online</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-400 opacity-70" />
+                    <span className="text-sm">Some Devices Offline</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-400 opacity-70" />
+                    <span className="text-sm">Region with Errors</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-400 opacity-70" />
+                    <span className="text-sm">All Devices Offline</span>
+                  </div>
+                </>
+              )}
+              {geoLevel === 1 && (
+                <>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-sm">Online Edge Computer</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-sm">Selected Edge Computer</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  <span className="text-sm">Offline Edge Computer</span>
+                </div>
+              </>
+              )}
             </div>
           </CardContent>
         </Card>
-
+        {/* Selected card */}
         <Card>
           <CardHeader>
-            <CardTitle>Selected Region{selectedRegions.length > 1 && "s"}</CardTitle>
+            <CardTitle>Selected {geoLevel === 0 ? "Region" : "Edge Computer"}{selectedItems.length > 1 && "s"}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-h-[500px] overflow-y-auto pr-2">
-              {selectedRegions.length > 0 ? (
-                selectedRegions.map((region) => (
-                  regionData[region] && (
-                    <div key={region} className="space-y-2 mb-4">
-                      <p className="text-sm font-medium">{region}</p>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <span className="text-muted-foreground">Devices:</span>
-                        <span>{regionData[region].devices}</span>
-                        <span className="text-muted-foreground">Errors:</span>
-                        <span>{regionData[region].errors}</span>
-                        <span className="text-muted-foreground">Offline:</span>
-                        <span>{regionData[region].offline}</span>
-                      </div>
-                    </div>
-                  )
+              {selectedItems.length > 0 ? (
+                selectedItems.map((item, index) => (
+                  <div key={index} className="space-y-2 mb-4">
+                    {typeof item === 'string' ? (
+                      <>
+                        <p className="text-sm font-medium">{item}</p>
+                        {regionData[item] && (
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <span className="text-muted-foreground">Devices:</span>
+                            <span>{regionData[item].devices}</span>
+                            <span className="text-muted-foreground">Online:</span>
+                            <span>{regionData[item].online}</span>
+                            <span className="text-muted-foreground">Errors:</span>
+                            <span>{regionData[item].errors}</span>
+                            <span className="text-muted-foreground">Offline:</span>
+                            <span>{regionData[item].offline}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
+                      </>
+                    )}
+                  </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No region selected</p>
+                <p className="text-sm text-muted-foreground">No {geoLevel === 0 ? "region" : "edge computer"} selected</p>
               )}
             </div>
           </CardContent>
