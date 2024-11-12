@@ -13,56 +13,25 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { X } from "lucide-react"
-
-// Sample data (remove this when connecting to a real database)
-const devices = [
-  {
-    id: "DEV001",
-    status: "Active",
-    clusterRegio: "North",
-    applications: ["App1", "App2"],
-    cpu: 45,
-    memory: 60,
-    lastCommunication: "2023-05-15T14:30:00Z",
-    ipAddress: "192.168.1.100",
-    macAddress: "00:1B:44:11:3A:B7",
-    manufacturer: "Cisco",
-    model: "ISR4321",
-    serialNumber: "FTX1234567A",
-  },
-  {
-    id: "DEV002",
-    status: "Inactive",
-    clusterRegio: "South",
-    applications: ["App3"],
-    cpu: 0,
-    memory: 5,
-    lastCommunication: "2023-05-14T09:15:00Z",
-    ipAddress: "192.168.1.101",
-    macAddress: "00:1B:44:11:3A:B8",
-    manufacturer: "Juniper",
-    model: "SRX300",
-    serialNumber: "AD3574290",
-  },
-  {
-    id: "DEV003",
-    status: "Active",
-    clusterRegio: "East",
-    applications: ["App1", "App4", "App5"],
-    cpu: 75,
-    memory: 80,
-    lastCommunication: "2023-05-15T15:45:00Z",
-    ipAddress: "192.168.1.102",
-    macAddress: "00:1B:44:11:3A:B9",
-    manufacturer: "Arista",
-    model: "7050CX3-32S",
-    serialNumber: "JPE17384950",
-  },
-]
+import { getMapData } from "@/app/api/mapData/route"  // Import the API function
 
 export default function DeviceTable() {
   const [selectedDevice, setSelectedDevice] = useState(null)
+  const [devices, setDevices] = useState([])  // State to store API data
   const modalRef = useRef(null)
+
+  // Fetch data from the API when the component mounts
+  useEffect(() => {
+    async function fetchDevices() {
+      try {
+        const data = await getMapData()
+        setDevices(data)
+      } catch (error) {
+        console.error("Error fetching device data:", error)
+      }
+    }
+    fetchDevices()
+  }, [])
 
   const handleRowClick = (device) => {
     setSelectedDevice(device)
@@ -95,28 +64,34 @@ export default function DeviceTable() {
         <TableHeader>
           <TableRow>
             <TableHead>Device ID</TableHead>
+            <TableHead>Name</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Cluster/Regio</TableHead>
-            <TableHead>Applications</TableHead>
-            <TableHead>CPU %</TableHead>
-            <TableHead>Memory %</TableHead>
-            <TableHead>Last Communication</TableHead>
+            <TableHead>Gemeente</TableHead>
+            <TableHead>Latitude</TableHead>
+            <TableHead>Longitude</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {devices.map((device) => (
             <TableRow key={device.id} onClick={() => handleRowClick(device)} className="cursor-pointer hover:bg-muted">
               <TableCell className="font-medium">{device.id}</TableCell>
+              <TableCell>{device.name}</TableCell>
               <TableCell>
-                <Badge variant={device.status === "Active" ? "success" : "secondary"}>
+                <Badge
+                  className={
+                    device.status === "online" ? "bg-green-500 text-white" :
+                    device.status === "offline" ? "bg-red-500 text-white" :
+                    device.status === "app_issue" ? "bg-yellow-500 text-black" :
+                    device.status === "error" ? "bg-orange-500 text-white" :
+                    "bg-gray-500 text-white" // Default color
+                  }
+                >
                   {device.status}
                 </Badge>
               </TableCell>
-              <TableCell>{device.clusterRegio}</TableCell>
-              <TableCell>{device.applications.join(", ")}</TableCell>
-              <TableCell>{device.cpu}%</TableCell>
-              <TableCell>{device.memory}%</TableCell>
-              <TableCell>{new Date(device.lastCommunication).toLocaleString()}</TableCell>
+              <TableCell>{device.municipality}</TableCell>
+              <TableCell>{device.latitude}</TableCell>
+              <TableCell>{device.longitude}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -134,20 +109,11 @@ export default function DeviceTable() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h3 className="font-semibold mb-2">General Information</h3>
+                <p><strong>Name:</strong> {selectedDevice.name}</p> {/* Added name */}
                 <p><strong>Status:</strong> {selectedDevice.status}</p>
-                <p><strong>Cluster/Regio:</strong> {selectedDevice.clusterRegio}</p>
-                <p><strong>Applications:</strong> {selectedDevice.applications.join(", ")}</p>
-                <p><strong>CPU Usage:</strong> {selectedDevice.cpu}%</p>
-                <p><strong>Memory Usage:</strong> {selectedDevice.memory}%</p>
-                <p><strong>Last Communication:</strong> {new Date(selectedDevice.lastCommunication).toLocaleString()}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">Technical Details</h3>
-                <p><strong>IP Address:</strong> {selectedDevice.ipAddress}</p>
-                <p><strong>MAC Address:</strong> {selectedDevice.macAddress}</p>
-                <p><strong>Manufacturer:</strong> {selectedDevice.manufacturer}</p>
-                <p><strong>Model:</strong> {selectedDevice.model}</p>
-                <p><strong>Serial Number:</strong> {selectedDevice.serialNumber}</p>
+                <p><strong>Gemeente:</strong> {selectedDevice.municipality}</p>
+                <p><strong>Latitude:</strong> {selectedDevice.latitude}</p>
+                <p><strong>Longitude:</strong> {selectedDevice.longitude}</p>
               </div>
             </div>
           </div>
