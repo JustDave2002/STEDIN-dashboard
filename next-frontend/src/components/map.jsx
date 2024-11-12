@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import "leaflet.markercluster";
 
 // Import different GeoJSON data
 import { stedinGeojson } from "@/data/stedinGeojson";
@@ -66,7 +68,7 @@ const regionData = {
 };
 
 const getRegionColor = (regionData) => {
-  if (!regionData) return "rgba(229, 231, 235, 0.5)"; // default color
+  if (!regionData) return "rgba(155, 155, 155, 0.5)"; // default color
   
   const { devices, errors, offline } = regionData;
   const total = devices + errors + offline;
@@ -109,7 +111,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
       />
     );
   } else {
-    return lowLevelGeojson.features.map((feature) => {
+    const markers = lowLevelGeojson.features.map((feature) => {
       const { coordinates } = feature.geometry;
       const isSelected = selectedItems.some(item => 
         (typeof item === 'string' && item === feature.properties.Naam) || 
@@ -126,19 +128,16 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
         icon = OfflineIcon;
       }
 
-      return (
-        <Marker
-          key={feature.id}
-          position={[coordinates[1], coordinates[0]]}
-          icon={icon}
-          eventHandlers={{
-            click: () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status),
-          }}
-        >
-          <Popup>{feature.properties.Naam}</Popup>
-        </Marker>
-      );
+      return L.marker([coordinates[1], coordinates[0]], { icon })
+        .bindPopup(feature.properties.Naam)
+        .on('click', () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status));
     });
+
+    const markerClusterGroup = L.markerClusterGroup();
+    markerClusterGroup.addLayers(markers);
+    map.addLayer(markerClusterGroup);
+
+    return null;
   }
 }
 
@@ -162,25 +161,33 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
       if (isMultiSelect) {
         setSelectedItems((prev) =>
           prev.includes(itemName)
-            ? prev.filter((r) => r !== itemName)
-            : [...prev, itemName]
+            ? prev.filter((r) => r !== itemName) // Deselect if already selected
+            : [...prev, itemName] // Select if not selected
         );
       } else {
-        setSelectedItems([itemName]);
+        setSelectedItems((prev) =>
+          prev.includes(itemName) ? [] : [itemName] // Deselect if already selected, otherwise select only this
+        );
       }
     } else {
       // Low-level view: select markers
       if (isMultiSelect) {
         setSelectedItems((prev) =>
-          prev.some(item => (typeof item === 'string' && item === itemName) || (typeof item === 'object' && item.name === itemName))
-            ? prev.filter((item) => (typeof item === 'string' && item !== itemName) || (typeof item === 'object' && item.name !== itemName))
-            : [...prev, { name: itemName, status: status }]
+          prev.some(item => (typeof item === 'string' && item === itemName) || 
+                            (typeof item === 'object' && item.name === itemName))
+            ? prev.filter((item) => 
+                (typeof item === 'string' && item !== itemName) || 
+                (typeof item === 'object' && item.name !== itemName)
+              ) // Deselect if already selected
+            : [...prev, { name: itemName, status: status }] // Select if not selected
         );
       } else {
-        setSelectedItems([{ name: itemName, status: status }]);
+        setSelectedItems((prev) =>
+          prev.some(item => item.name === itemName) ? [] : [{ name: itemName, status: status }]
+        );
       }
     }
-  }, [isMultiSelect, geoLevel]);
+  }, [isMultiSelect, geoLevel]);  
 
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
@@ -191,6 +198,15 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
       default:
         return "text-gray-500";
     }
+  };
+
+  const handleRemoveClick = (itemToRemove) => {
+    setSelectedItems((prevItems) =>
+      prevItems.filter(item => 
+        (typeof item === 'string' && item !== itemToRemove) || 
+        (typeof item === 'object' && item.name !== itemToRemove.name)
+      )
+    );
   };
 
   return (
@@ -221,6 +237,7 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
                 key={mapKey}
                 center={[51.5, 3.8]}
                 zoom={9}
+                maxZoom={18}
                 style={{ height: "100%", width: "100%" }}
                 scrollWheelZoom={true}
               >
@@ -298,29 +315,37 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
             <div className="max-h-[500px] overflow-y-auto pr-2">
               {selectedItems.length > 0 ? (
                 selectedItems.map((item, index) => (
-                  <div key={index} className="space-y-2 mb-4">
-                    {typeof item === 'string' ? (
-                      <>
-                        <p className="text-sm font-medium">{item}</p>
-                        {regionData[item] && (
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <span className="text-muted-foreground">Devices:</span>
-                            <span>{regionData[item].devices}</span>
-                            <span className="text-muted-foreground">Online:</span>
-                            <span>{regionData[item].online}</span>
-                            <span className="text-muted-foreground">Errors:</span>
-                            <span>{regionData[item].errors}</span>
-                            <span className="text-muted-foreground">Offline:</span>
-                            <span>{regionData[item].offline}</span>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm font-medium">{item.name}</p>
-                        <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
-                      </>
-                    )}
+                  <div key={index} className="space-y-2 mb-4 flex items-center justify-between">
+                    <div>
+                      {typeof item === 'string' ? (
+                        <>
+                          <p className="text-sm font-medium">{item}</p>
+                          {regionData[item] && (
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <span className="text-muted-foreground">Devices:</span>
+                              <span>{regionData[item].devices}</span>
+                              <span className="text-muted-foreground">Online:</span>
+                              <span>{regionData[item].online}</span>
+                              <span className="text-muted-foreground">Errors:</span>
+                              <span>{regionData[item].errors}</span>
+                              <span className="text-muted-foreground">Offline:</span>
+                              <span>{regionData[item].offline}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
+                        </>
+                      )}
+                    </div>
+                    <button
+                      className="text-red-500 hover:text-red-700"
+                      onClick={() => handleRemoveClick(item)}
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))
               ) : (
