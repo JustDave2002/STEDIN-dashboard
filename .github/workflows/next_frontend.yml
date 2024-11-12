@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./react-frontend
+        working-directory: ./next-frontend
 
     steps:
       - uses: actions/checkout@v4
