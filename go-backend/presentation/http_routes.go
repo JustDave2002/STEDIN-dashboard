@@ -7,7 +7,7 @@ import (
 
 func RegisterDeviceHandlers(router *mux.Router) {
 	// TODO rework: for /map, make it so it returns what is needed for map (so change handlers, service, repo, etc)
-	router.HandleFunc("/map", handler.GetAllDevicesHandler).Methods("GET")
+	router.HandleFunc("/map", handler.GetAllDevicesMapHandler).Methods("GET")
 	// TODO rework: for /devices, return devices with appropriate attributes: device info, tags, application
 	router.HandleFunc("/devices", handler.GetAllDevicesHandler).Methods("GET")
 }

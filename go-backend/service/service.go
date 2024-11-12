@@ -12,3 +12,7 @@ func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
 func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 	return repository.GetAllDevices()
 }
+
+func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
+	return repository.GetAllDevicesForMap()
+}
