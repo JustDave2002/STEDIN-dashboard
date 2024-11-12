@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-faker/faker/v4"
@@ -14,9 +16,10 @@ import (
 )
 
 const (
-	numDevices      = 100
-	numLogs         = 500
+	numDevices      = 2000
+	numLogs         = 5000
 	numApplications = 4
+	seedFilePath    = "seed.sql"
 )
 
 var municipalities []string
@@ -50,8 +53,18 @@ func main() {
 	// Print all municipalities names
 	municipalities = getMunicipalityNames()
 	for _, name := range municipalities {
-		println("Gemeente:", name)
+		fmt.Println("Gemeente:", name)
 	}
+
+	err = resetDatabase(db)
+	if err != nil {
+		log.Fatalf("Error emptying database: %v", err)
+	}
+	err = executeSQLFile(db)
+	if err != nil {
+		log.Fatalf("Error reseeding database: %v", err)
+	}
+
 	SeedMunicipalityData(db, municipalities)
 
 	for i := 0; i < numDevices; i++ {
@@ -65,6 +78,65 @@ func main() {
 		fmt.Println("Finished seeding log ", i)
 	}
 	log.Println("Finished seeding logs")
+}
+
+// Function to empty all tables and execute seed.sql
+func resetDatabase(db *sql.DB) error {
+	// Define tables to truncate in dependency order
+	tables := []string{
+		"application_instances", "application_sensors", "applications", "device_sensors",
+		"device_tags", "edge_devices", "logs", "meber_applications", "meber_roles",
+		"mebers", "role_tags", "roles", "sensors", "tags",
+	}
+
+	// Temporarily disable foreign key checks
+	_, err := db.Exec("SET FOREIGN_KEY_CHECKS=0")
+	if err != nil {
+		return fmt.Errorf("error disabling foreign key checks: %v", err)
+	}
+
+	// Truncate each table
+	for _, table := range tables {
+		_, err := db.Exec(fmt.Sprintf("TRUNCATE TABLE %s", table))
+		if err != nil {
+			return fmt.Errorf("error truncating table %s: %v", table, err)
+		}
+	}
+
+	// Re-enable foreign key checks
+	_, err = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+	if err != nil {
+		return fmt.Errorf("error enabling foreign key checks: %v", err)
+	}
+
+	return nil
+}
+
+// executeSQLFile reads and executes the SQL statements from a file
+func executeSQLFile(db *sql.DB) error {
+	// Read the SQL file
+	content, err := ioutil.ReadFile(seedFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read SQL file: %w", err)
+	}
+
+	// Split the content into individual SQL statements
+	commands := strings.Split(string(content), ";")
+	for _, command := range commands {
+		command = strings.TrimSpace(command)
+		if command == "" {
+			continue // Skip empty commands
+		}
+
+		// Execute each SQL statement
+		if _, err := db.Exec(command); err != nil {
+			log.Printf("failed to execute command: %s, error: %v", command, err)
+		} else {
+			log.Printf("executed command: %s", command)
+		}
+	}
+
+	return nil
 }
 
 func seedEdgeDevice(db *sql.DB, index int) {
