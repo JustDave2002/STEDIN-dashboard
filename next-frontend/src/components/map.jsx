@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import "leaflet.markercluster";
 
 // Import different GeoJSON data
 import { stedinGeojson } from "@/data/stedinGeojson";
@@ -66,7 +68,7 @@ const regionData = {
 };
 
 const getRegionColor = (regionData) => {
-  if (!regionData) return "rgba(229, 231, 235, 0.5)"; // default color
+  if (!regionData) return "rgba(155, 155, 155, 0.5)"; // default color
   
   const { devices, errors, offline } = regionData;
   const total = devices + errors + offline;
@@ -109,7 +111,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
       />
     );
   } else {
-    return lowLevelGeojson.features.map((feature) => {
+    const markers = lowLevelGeojson.features.map((feature) => {
       const { coordinates } = feature.geometry;
       const isSelected = selectedItems.some(item => 
         (typeof item === 'string' && item === feature.properties.Naam) || 
@@ -126,19 +128,16 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
         icon = OfflineIcon;
       }
 
-      return (
-        <Marker
-          key={feature.id}
-          position={[coordinates[1], coordinates[0]]}
-          icon={icon}
-          eventHandlers={{
-            click: () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status),
-          }}
-        >
-          <Popup>{feature.properties.Naam}</Popup>
-        </Marker>
-      );
+      return L.marker([coordinates[1], coordinates[0]], { icon })
+        .bindPopup(feature.properties.Naam)
+        .on('click', () => onItemClick(feature.properties.Naam, feature.properties.Gemeente, status));
     });
+
+    const markerClusterGroup = L.markerClusterGroup();
+    markerClusterGroup.addLayers(markers);
+    map.addLayer(markerClusterGroup);
+
+    return null;
   }
 }
 
@@ -221,6 +220,7 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
                 key={mapKey}
                 center={[51.5, 3.8]}
                 zoom={9}
+                maxZoom={18}
                 style={{ height: "100%", width: "100%" }}
                 scrollWheelZoom={true}
               >
