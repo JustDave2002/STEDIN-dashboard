@@ -182,7 +182,7 @@ func seedEdgeDevice(db *sql.DB, index int) {
 	query := `INSERT INTO edge_devices ( name, status, last_contact, connection_type, coordinates, ip_address, performance_metric)
 	VALUES ( ?, ?, ?, ?, POINT(?, ?), ?, ?)`
 
-	res, err := db.Exec(query, name, status, lastContact, connectionType, coordinates.lat, coordinates.lon, ipAddress, performanceMetric)
+	res, err := db.Exec(query, name, status, lastContact, connectionType, coordinates.lon, coordinates.lat, ipAddress, performanceMetric)
 	if err != nil {
 		log.Printf("Error inserting edge device %d: %v\n", index, err)
 		return
@@ -206,9 +206,9 @@ func seedEdgeDevice(db *sql.DB, index int) {
 func weightedStatus() string {
 	r := rand.Intn(100)
 	switch {
-	case r < 90:
+	case r < 97:
 		return "online"
-	case r < 95:
+	case r < 99:
 		return "offline"
 	default:
 		return "error"
@@ -239,7 +239,7 @@ func seedDeviceSensorsAndApplications(db *sql.DB, deviceID int64, deviceStatus s
 		"Audio Analysis":         {"audio sensor"},
 	}
 
-	numApps := rand.Intn(4) + 1
+	numApps := rand.Intn(2) + 1
 	selectedApps := randomApplications(numApps)
 
 	for _, appName := range selectedApps {
@@ -313,7 +313,7 @@ func applicationStatusForDevice(deviceStatus string) string {
 	if deviceStatus == "offline" {
 		return "offline"
 	}
-	if rand.Intn(100) < 5 {
+	if rand.Intn(100) < 1 {
 		return "error"
 	}
 	//TODO: add warning

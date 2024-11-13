@@ -48,17 +48,16 @@ func LoadMunicipalityGeojson(filename string) {
 }
 
 // calculateBoundingBox calculates the bounding box of a GeoJSON MultiPolygon.
-func calculateBoundingBox(feature *geojson.Feature) (minLat, minLon, maxLat, maxLon float64) {
-	// Same as the previous implementation.
+func calculateBoundingBox(feature *geojson.Feature) (minLon, minLat, maxLon, maxLat float64) {
 	if feature.Geometry.Type == geojson.GeometryMultiPolygon {
 		firstCoord := feature.Geometry.MultiPolygon[0][0][0]
-		minLat, minLon = firstCoord[1], firstCoord[0]
-		maxLat, maxLon = firstCoord[1], firstCoord[0]
+		minLon, minLat = firstCoord[0], firstCoord[1]
+		maxLon, maxLat = firstCoord[0], firstCoord[1]
 
 		for _, polygon := range feature.Geometry.MultiPolygon {
 			for _, ring := range polygon {
 				for _, coord := range ring {
-					lat, lon := coord[1], coord[0]
+					lon, lat := coord[0], coord[1]
 					if lat < minLat {
 						minLat = lat
 					}
@@ -85,23 +84,23 @@ func randomCoordinatesWithinMunicipality(municipality string) Coordinates {
 		panic("No polygon data found for municipality: " + municipality)
 	}
 
-	minLat, minLon, maxLat, maxLon := calculateBoundingBox(feature)
+	minLon, minLat, maxLon, maxLat := calculateBoundingBox(feature)
 
 	for {
-		lat := minLat + rand.Float64()*(maxLat-minLat)
 		lon := minLon + rand.Float64()*(maxLon-minLon)
-		if pointInPolygon(lat, lon, feature) {
-			return Coordinates{lat: lat, lon: lon}
+		lat := minLat + rand.Float64()*(maxLat-minLat)
+		if pointInPolygon(lon, lat, feature) {
+			return Coordinates{lon: lon, lat: lat}
 		}
 	}
 }
 
 // pointInPolygon performs a point-in-polygon test using the ray-casting algorithm.
-func pointInPolygon(lat, lon float64, feature *geojson.Feature) bool {
+func pointInPolygon(lon, lat float64, feature *geojson.Feature) bool {
 	if feature.Geometry.Type == geojson.GeometryMultiPolygon {
 		for _, polygon := range feature.Geometry.MultiPolygon {
 			for _, ring := range polygon {
-				if isPointInRing(lat, lon, ring) {
+				if isPointInRing(lon, lat, ring) {
 					return true
 				}
 			}
@@ -111,12 +110,12 @@ func pointInPolygon(lat, lon float64, feature *geojson.Feature) bool {
 }
 
 // isPointInRing checks if a point is within a polygon ring using the ray-casting algorithm.
-func isPointInRing(lat, lon float64, ring [][]float64) bool {
+func isPointInRing(lon, lat float64, ring [][]float64) bool {
 	inside := false
 	j := len(ring) - 1
 	for i := 0; i < len(ring); i++ {
-		yi, xi := ring[i][1], ring[i][0]
-		yj, xj := ring[j][1], ring[j][0]
+		xi, yi := ring[i][0], ring[i][1]
+		xj, yj := ring[j][0], ring[j][1]
 		if ((yi > lat) != (yj > lat)) && (lon < (xj-xi)*(lat-yi)/(yj-yi)+xi) {
 			inside = !inside
 		}

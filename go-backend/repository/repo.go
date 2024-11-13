@@ -15,8 +15,8 @@ func GetDeviceByID(deviceID int64) (structs.EdgeDevice, error) {
             status, 
             last_contact, 
             connection_type, 
-            ST_X(coordinates) AS longitude, 
-            ST_Y(coordinates) AS latitude, 
+            ST_X(coordinates) AS latitude, 
+            ST_Y(coordinates) AS longitude, 
             ip_address, 
             performance_metric 
         FROM edge_devices
@@ -51,8 +51,8 @@ func GetAllDevices() ([]structs.EdgeDevice, error) {
             status, 
             last_contact, 
             connection_type, 
-            ST_X(coordinates) AS longitude, 
-            ST_Y(coordinates) AS latitude, 
+            ST_X(coordinates) AS latitude, 
+            ST_Y(coordinates) AS longitude, 
             ip_address, 
             performance_metric 
         FROM edge_devices
@@ -101,6 +101,7 @@ func GetAllDevices() ([]structs.EdgeDevice, error) {
 	return devices, nil
 }
 
+// TODO: Fix the lat long for the love of anything sane
 func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 	query := `
 		SELECT 
@@ -109,8 +110,8 @@ func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 			ed.status, 
 			ed.last_contact, 
 			ed.connection_type, 
-			ST_X(ed.coordinates) AS longitude, 
-			ST_Y(ed.coordinates) AS latitude, 
+			ST_X(ed.coordinates) AS latitude, 
+			ST_Y(ed.coordinates) AS longitude, 
 			ed.ip_address, 
 			ed.performance_metric, 
 			tg.name AS municipality

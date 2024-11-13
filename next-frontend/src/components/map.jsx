@@ -108,7 +108,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
     const geoData = geoLevel === 0 ? stedinGeojson : lowLevelData;
 
     if (geoData && map) {
-      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.longitude, feature.latitude]));
+      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.latitude, feature.longitude]));
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [50, 50] }); // Adding padding for visibility
       }
@@ -153,7 +153,8 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
       let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
 
       // TODO omgedraaide latitude, longtitude
-      return L.marker([longitude, latitude], { icon })
+      //fixed I think?
+      return L.marker([latitude, longitude], { icon })
         .bindPopup(name)
         .on('click', () => onItemClick(name, municipality, status));
     });
