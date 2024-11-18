@@ -11,7 +11,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 
 // Import high-level GeoJSON data
-import { stedinGeojson } from "@/data/stedinGeojson";
+import { stedinGeojson } from "@/data/StedinGeojson";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -108,7 +108,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
     const geoData = geoLevel === 0 ? stedinGeojson : lowLevelData;
 
     if (geoData && map) {
-      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.latitude, feature.longitude]));
+      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.longitude, feature.latitude]));
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [50, 50] }); // Adding padding for visibility
       }
