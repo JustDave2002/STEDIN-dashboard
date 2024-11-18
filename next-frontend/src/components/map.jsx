@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from "react-leaflet";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { MapContainer, TileLayer, GeoJSON, useMap, FeatureGroup } from "react-leaflet";
+import { EditControl } from "react-leaflet-draw";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
+import "leaflet-draw/dist/leaflet.draw.css";
 
 // Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/StedinGeojson";
@@ -78,11 +80,121 @@ const getRegionColor = (regionData) => {
   return "rgba(74, 222, 128, 0.5)"; // all online
 };
 
-function MapContent({ geoLevel, onItemClick, selectedItems }) {
+function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDragDeselect, lowLevelData, isDeselectMode }) {
   const map = useMap();
+  const featureGroupRef = useRef();
+  const markerClusterGroupRef = useRef();
+
+  useEffect(() => {
+    if (geoLevel === 1 && lowLevelData && map) {
+      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.latitude, feature.longitude]));
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [geoLevel, map, lowLevelData]);
+
+  useEffect(() => {
+    return () => {
+      if (markerClusterGroupRef.current) {
+        map.removeLayer(markerClusterGroupRef.current);
+      }
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (geoLevel === 1 && lowLevelData) {
+      if (markerClusterGroupRef.current) {
+        map.removeLayer(markerClusterGroupRef.current);
+      }
+
+      const markers = lowLevelData.map((feature) => {
+        const { latitude, longitude, name, status, municipality } = feature;
+
+        const isSelected = selectedItems.some(item =>
+          (typeof item === 'string' && item === name) ||
+          (typeof item === 'object' && item.name === name)
+        );
+
+        let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
+
+        return L.marker([latitude, longitude], { icon })
+          .bindPopup(name)
+          .on('click', () => onItemClick(name, municipality, status));
+      });
+
+      const markerClusterGroup = L.markerClusterGroup();
+      markerClusterGroup.addLayers(markers);
+      map.addLayer(markerClusterGroup);
+      markerClusterGroupRef.current = markerClusterGroup;
+    }
+  }, [geoLevel, lowLevelData, selectedItems, map, onItemClick]);
+
+  const handleCreated = (e) => {
+    const layer = e.layer;
+    if (layer instanceof L.Rectangle) {
+      const bounds = layer.getBounds();
+      if (isDeselectMode) {
+        onDragDeselect(bounds);
+      } else {
+        onDragSelect(bounds);
+      }
+    }
+    featureGroupRef.current.clearLayers();
+  };
+
+  return (
+    <>
+      {geoLevel === 0 && (
+        <GeoJSON
+          key="high-level"
+          data={stedinGeojson}
+          style={(feature) => {
+            const regionName = feature.properties.name;
+            const isSelected = selectedItems.includes(regionName);
+            return {
+              fillColor: isSelected ? "rgba(96, 165, 250, 0.5)" : getRegionColor(regionData[regionName]),
+              fillOpacity: 0.5,
+              color: "#FFFFFF",
+              weight: 1,
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            layer.on({
+              click: () => onItemClick(feature.properties.name),
+            });
+          }}
+        />
+      )}
+      <FeatureGroup ref={featureGroupRef}>
+        <EditControl
+          position="topright"
+          onCreated={handleCreated}
+          draw={{
+            rectangle: {
+              shapeOptions: {
+                color: isDeselectMode ? '#ff3333' : '#3388ff',
+              },
+            },
+            polygon: false,
+            circle: false,
+            circlemarker: false,
+            marker: false,
+            polyline: false,
+          }}
+        />
+      </FeatureGroup>
+    </>
+  );
+}
+
+export default function InteractiveMap({ geoLevel = 0, filters }) {
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [isDeselectMode, setIsDeselectMode] = useState(false);
+  const [mapKey, setMapKey] = useState(0);
   const [lowLevelData, setLowLevelData] = useState(null);
 
-  // Fetch low-level data
   useEffect(() => {
     if (geoLevel === 1) {
       const fetchLowLevelData = async () => {
@@ -90,7 +202,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
           const response = await fetch('http://localhost:8000/map');
           if (response.ok) {
             const data = await response.json();
-            setLowLevelData(data); // Store fetched data
+            setLowLevelData(data);
           } else {
             console.error('Failed to fetch low-level data');
           }
@@ -103,86 +215,13 @@ function MapContent({ geoLevel, onItemClick, selectedItems }) {
   }, [geoLevel]);
 
   useEffect(() => {
-    if (geoLevel === 0) return;
-
-    const geoData = geoLevel === 0 ? stedinGeojson : lowLevelData;
-
-    if (geoData && map) {
-      const bounds = L.latLngBounds(lowLevelData.map((feature) => [feature.longitude, feature.latitude]));
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] }); // Adding padding for visibility
-      }
-    }
-  }, [geoLevel, map, lowLevelData]);
-
-  if (geoLevel === 0) {
-    return (
-      <GeoJSON
-        key="high-level"
-        data={stedinGeojson}
-        style={(feature) => {
-          const regionName = feature.properties.name;
-          const isSelected = selectedItems.includes(regionName);
-          return {
-            fillColor: isSelected ? "rgba(96, 165, 250, 0.5)" : getRegionColor(regionData[regionName]),
-            fillOpacity: 0.5,
-            color: "#FFFFFF",
-            weight: 1,
-          };
-        }}
-        onEachFeature={(feature, layer) => {
-          layer.on({
-            click: () => onItemClick(feature.properties.name),
-          });
-        }}
-      />
-    );
-  } else {
-    if (!lowLevelData) {
-      return <div>Loading low-level data...</div>;
-    }
-
-    const markers = lowLevelData.map((feature) => {
-      const { latitude, longitude, name, status, municipality } = feature;
-
-      const isSelected = selectedItems.some(item =>
-        (typeof item === 'string' && item === name) ||
-        (typeof item === 'object' && item.name === name)
-      );
-
-      let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
-
-      // TODO omgedraaide latitude, longtitude
-      //fixed I think?
-      return L.marker([latitude, longitude], { icon })
-        .bindPopup(name)
-        .on('click', () => onItemClick(name, municipality, status));
-    });
-
-    // Filter out null markers and log their count
-    const validMarkers = markers.filter(marker => marker !== null);
-
-    const markerClusterGroup = L.markerClusterGroup();
-    markerClusterGroup.addLayers(validMarkers);
-    map.addLayer(markerClusterGroup);
-
-    return null;
-  }
-}
-
-export default function InteractiveMap({ geoLevel = 0, filters }) {
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [isMultiSelect, setIsMultiSelect] = useState(false);
-  const [mapKey, setMapKey] = useState(0);
-
-  useEffect(() => {
     setSelectedItems([]);
     setMapKey(prev => prev + 1);
   }, [geoLevel]);
 
   useEffect(() => {
     setMapKey(prev => prev + 1);
-  }, [isMultiSelect]);
+  }, [isMultiSelect, isDeselectMode]);
 
   const handleItemClick = useCallback((itemName, gemeente, status) => {
     if (geoLevel === 0) {
@@ -190,12 +229,12 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
       if (isMultiSelect) {
         setSelectedItems((prev) =>
           prev.includes(itemName)
-            ? prev.filter((r) => r !== itemName) // Deselect if already selected
-            : [...prev, itemName] // Select if not selected
+            ? prev.filter((r) => r !== itemName)
+            : [...prev, itemName]
         );
       } else {
         setSelectedItems((prev) =>
-          prev.includes(itemName) ? [] : [itemName] // Deselect if already selected, otherwise select only this
+          prev.includes(itemName) ? [] : [itemName]
         );
       }
     } else {
@@ -207,8 +246,8 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
             ? prev.filter((item) => 
                 (typeof item === 'string' && item !== itemName) || 
                 (typeof item === 'object' && item.name !== itemName)
-              ) // Deselect if already selected
-            : [...prev, { name: itemName, status: status }] // Select if not selected
+              )
+            : [...prev, { name: itemName, status: status }]
         );
       } else {
         setSelectedItems((prev) =>
@@ -216,7 +255,57 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
         );
       }
     }
-  }, [isMultiSelect, geoLevel]);  
+  }, [isMultiSelect, geoLevel]);
+  
+  const handleDragSelect = useCallback((bounds) => {
+    if (geoLevel === 0) {
+      const selectedRegions = stedinGeojson.features.filter(feature => {
+        const polygon = L.polygon(feature.geometry.coordinates[0]);
+        return bounds.intersects(polygon.getBounds());
+      }).map(feature => feature.properties.name);
+
+      setSelectedItems(prev => {
+        if (isMultiSelect) {
+          return [...new Set([...prev, ...selectedRegions])];
+        } else {
+          return selectedRegions;
+        }
+      });
+    } else if (lowLevelData) {
+      const selectedMarkers = lowLevelData.filter(feature => 
+        bounds.contains(L.latLng(feature.latitude, feature.longitude))
+      ).map(feature => ({ name: feature.name, status: feature.status }));
+
+      setSelectedItems(prev => {
+        if (isMultiSelect) {
+          const prevSet = new Set(prev.map(item => typeof item === 'string' ? item : item.name));
+          const newItems = selectedMarkers.filter(marker => !prevSet.has(marker.name));
+          return [...prev, ...newItems];
+        } else {
+          return selectedMarkers;
+        }
+      });
+    }
+  }, [geoLevel, isMultiSelect, lowLevelData]);
+
+  const handleDragDeselect = useCallback((bounds) => {
+    if (geoLevel === 0) {
+      const deselectedRegions = stedinGeojson.features.filter(feature => {
+        const polygon = L.polygon(feature.geometry.coordinates[0]);
+        return bounds.intersects(polygon.getBounds());
+      }).map(feature => feature.properties.name);
+
+      setSelectedItems(prev => prev.filter(item => !deselectedRegions.includes(item)));
+    } else if (lowLevelData) {
+      const deselectedMarkers = lowLevelData.filter(feature => 
+        bounds.contains(L.latLng(feature.latitude, feature.longitude))
+      ).map(feature => feature.name);
+
+      setSelectedItems(prev => prev.filter(item => 
+        typeof item === 'string' ? !deselectedMarkers.includes(item) : !deselectedMarkers.includes(item.name)
+      ));
+    }
+  }, [geoLevel, lowLevelData]);
 
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
@@ -246,20 +335,32 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
             <CardTitle>Map</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 flex items-center space-x-2">
-              <Switch
-                id="multi-select"
-                checked={isMultiSelect}
-                onCheckedChange={(checked) => {
-                  setIsMultiSelect(checked);
-                  if (!checked) {
-                    setSelectedItems([]);
-                  }
-                }}
-              />
-              <Label htmlFor="multi-select">
-                {isMultiSelect ? "Multi-select mode" : "Single-select mode"}
-              </Label>
+            <div className="mb-4 flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="multi-select"
+                  checked={isMultiSelect}
+                  onCheckedChange={(checked) => {
+                    setIsMultiSelect(checked);
+                    if (!checked) {
+                      setSelectedItems([]);
+                    }
+                  }}
+                />
+                <Label htmlFor="multi-select">
+                  {isMultiSelect ? "Multi-select mode" : "Single-select mode"}
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="deselect-mode"
+                  checked={isDeselectMode}
+                  onCheckedChange={setIsDeselectMode}
+                />
+                <Label htmlFor="deselect-mode">
+                  {isDeselectMode ? "Deselect mode" : "Select mode"}
+                </Label>
+              </div>
             </div>
             <div className="relative aspect-[5/3] border border-gray-200 rounded-lg overflow-hidden">
               <MapContainer
@@ -278,6 +379,10 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
                   geoLevel={geoLevel} 
                   onItemClick={handleItemClick}
                   selectedItems={selectedItems}
+                  onDragSelect={handleDragSelect}
+                  onDragDeselect={handleDragDeselect}
+                  lowLevelData={lowLevelData}
+                  isDeselectMode={isDeselectMode}
                 />
               </MapContainer>
             </div>
@@ -295,7 +400,7 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
               {geoLevel === 0 && (
                 <>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-400 opacity-70" />
+                <div className="w-3 h-3 rounded-full bg-blue-400 opacity-70" />
                     <span className="text-sm">Selected Region</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -332,6 +437,14 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
                 </div>
               </>
               )}
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="text-sm">Select Rectangle</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-sm">Deselect Rectangle</span>
+              </div>
             </div>
           </CardContent>
         </Card>
