@@ -34,7 +34,7 @@ func GetDeviceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	devices, err := service.GetAllEdgeDevices()
+	devices, err := service.GetAllDevicesWithApplications()
 	if err != nil {
 		http.Error(w, "Error retrieving devices", http.StatusInternalServerError)
 		return
