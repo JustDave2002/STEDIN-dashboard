@@ -1,6 +1,7 @@
 package service
 
 import (
+	"log"
 	"main/repository"
 	"main/structs"
 )
@@ -17,36 +18,58 @@ func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 	return repository.GetAllDevicesForMap()
 }
 
+// GetAllDevicesWithApplications groups and converts data from the repository into DTO format
 func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error) {
-	devices, err := repository.GetAllDevices()
+	// Fetch raw data from repository
+	rawResults, err := repository.GetAllDevicesWithApplications()
 	if err != nil {
+		log.Printf("Error fetching devices and applications: %v", err)
 		return nil, err
 	}
 
-	var devicesWithApps []structs.DeviceWithApplicationsDTO
+	// A map to hold device IDs and their associated application instances
+	deviceMap := make(map[int64]*structs.DeviceWithApplicationsDTO)
 
-	for _, device := range devices {
-		// Fetch application instances for the device
-		apps, err := repository.GetApplicationInstancesByDeviceID(device.ID)
-		if err != nil {
-			return nil, err
+	// Iterate through the raw results and group applications by device
+	for _, result := range rawResults {
+		// If the device is not in the map, initialize its DTO
+		if _, exists := deviceMap[result.DeviceID]; !exists {
+			deviceMap[result.DeviceID] = &structs.DeviceWithApplicationsDTO{
+				DeviceID:       result.DeviceID,
+				Name:           result.DeviceName,
+				Status:         result.DeviceStatus,
+				LastContact:    result.DeviceLastContact,
+				ConnectionType: result.DeviceConnectionType,
+				Latitude:       result.Latitude,
+				Longitude:      result.Longitude,
+				IPAddress:      result.DeviceIPAddress,
+				Applications:   []structs.ApplicationInstanceDTO{}, // Start with an empty slice
+			}
 		}
 
-		// Populate the DeviceWithApplicationsDTO
-		deviceDTO := structs.DeviceWithApplicationsDTO{
-			DeviceID:       device.ID,
-			Name:           device.Name,
-			Status:         device.Status,
-			LastContact:    device.LastContact.Format("2006-01-02 15:04:05"),
-			ConnectionType: device.ConnectionType,
-			Latitude:       device.Latitude,
-			Longitude:      device.Longitude,
-			IPAddress:      device.IPAddress,
-			Applications:   apps,
+		// Now append the application instance to the correct device entry
+		appDTO := structs.ApplicationInstanceDTO{
+			InstanceID:  result.InstanceID,
+			Name:        result.AppName,
+			Status:      result.AppStatus,
+			Path:        result.AppPath,
+			Description: result.AppDescription,
+			Version:     result.AppVersion,
 		}
-
-		devicesWithApps = append(devicesWithApps, deviceDTO)
+		deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, appDTO)
 	}
+
+	// Convert the map to a slice for returning
+	var devicesWithApps []structs.DeviceWithApplicationsDTO
+	for _, deviceDTO := range deviceMap {
+		devicesWithApps = append(devicesWithApps, *deviceDTO)
+	}
+
+	// Optionally, sort the slice by DeviceID or any other criteria if needed
+	// For example, sorting by device ID:
+	// sort.Slice(devicesWithApps, func(i, j int) bool {
+	//     return devicesWithApps[i].DeviceID < devicesWithApps[j].DeviceID
+	// })
 
 	return devicesWithApps, nil
 }

@@ -229,3 +229,109 @@ func GetApplicationInstancesByDeviceID(deviceID int64) ([]structs.ApplicationIns
 
 	return apps, nil
 }
+
+// Fetches all devices and their associated applications from the database
+func GetAllDevicesWithApplications() ([]struct {
+	DeviceID             int64
+	DeviceName           string
+	DeviceStatus         string
+	DeviceLastContact    string
+	DeviceConnectionType string
+	Longitude            float64
+	Latitude             float64
+	DeviceIPAddress      string
+	InstanceID           int64
+	AppName              string
+	AppStatus            string
+	AppPath              string
+	AppDescription       string
+	AppVersion           string
+}, error) {
+	query := `
+        SELECT 
+            d.id AS device_id, 
+            d.name AS device_name, 
+            d.status AS device_status, 
+            d.last_contact AS device_last_contact, 
+            d.connection_type AS device_connection_type, 
+            ST_X(d.coordinates) AS longitude, 
+            ST_Y(d.coordinates) AS latitude, 
+            d.ip_address AS device_ip_address,
+            ai.id AS instance_id, 
+            a.name AS app_name, 
+            ai.status AS app_status, 
+            ai.path AS app_path, 
+            a.description AS app_description, 
+            a.version AS app_version
+        FROM 
+            edge_devices d
+        LEFT JOIN 
+            application_instances ai 
+        ON 
+            d.id = ai.device_id
+        LEFT JOIN 
+            applications a 
+        ON 
+            ai.app_id = a.id
+        ORDER BY d.id;
+    `
+
+	// Run the query
+	rows, err := DB.Query(query)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Slice to hold the final raw results
+	var rawResults []struct {
+		DeviceID             int64
+		DeviceName           string
+		DeviceStatus         string
+		DeviceLastContact    string
+		DeviceConnectionType string
+		Longitude            float64
+		Latitude             float64
+		DeviceIPAddress      string
+		InstanceID           int64
+		AppName              string
+		AppStatus            string
+		AppPath              string
+		AppDescription       string
+		AppVersion           string
+	}
+
+	// Iterate over the rows returned by the query
+	for rows.Next() {
+		var result struct {
+			DeviceID             int64
+			DeviceName           string
+			DeviceStatus         string
+			DeviceLastContact    string
+			DeviceConnectionType string
+			Longitude            float64
+			Latitude             float64
+			DeviceIPAddress      string
+			InstanceID           int64
+			AppName              string
+			AppStatus            string
+			AppPath              string
+			AppDescription       string
+			AppVersion           string
+		}
+
+		err := rows.Scan(&result.DeviceID, &result.DeviceName, &result.DeviceStatus, &result.DeviceLastContact, &result.DeviceConnectionType,
+			&result.Longitude, &result.Latitude, &result.DeviceIPAddress, &result.InstanceID, &result.AppName,
+			&result.AppStatus, &result.AppPath, &result.AppDescription, &result.AppVersion)
+		if err != nil {
+			log.Printf("Error scanning row: %v", err)
+			return nil, err
+		}
+
+		// Add the raw result to the slice
+		rawResults = append(rawResults, result)
+	}
+
+	return rawResults, nil
+}
