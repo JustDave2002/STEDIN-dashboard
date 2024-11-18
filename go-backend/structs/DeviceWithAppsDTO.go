@@ -10,6 +10,8 @@ type DeviceWithApplicationsDTO struct {
 	Longitude      float64                  `json:"longitude"`
 	IPAddress      string                   `json:"ip_address"`
 	Applications   []ApplicationInstanceDTO `json:"applications"`
+	Tags           []Tag                    `json:"tags"` // Add tags here
+
 }
 
 type ApplicationInstanceDTO struct {
@@ -19,4 +21,14 @@ type ApplicationInstanceDTO struct {
 	Version     string `json:"version"`
 	Status      string `json:"status"`
 	Path        string `json:"path"`
+}
+
+// Define the Tag domain model
+// TODO:move to seperate file
+type Tag struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	IsEditable bool   `json:"is_editable"`
+	OwnerID    *int64 `json:"owner_id"` // Nullable foreign key
 }

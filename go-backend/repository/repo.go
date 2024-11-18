@@ -246,6 +246,11 @@ func GetAllDevicesWithApplications() ([]struct {
 	AppPath              string
 	AppDescription       string
 	AppVersion           string
+	TagID                *int64
+	TagName              *string
+	TagType              *string
+	TagIsEditable        *bool
+	TagOwnerID           *int64
 }, error) {
 	query := `
         SELECT 
@@ -262,7 +267,12 @@ func GetAllDevicesWithApplications() ([]struct {
             ai.status AS app_status, 
             ai.path AS app_path, 
             a.description AS app_description, 
-            a.version AS app_version
+            a.version AS app_version,
+            t.id AS tag_id,
+            t.name AS tag_name,
+            t.type AS tag_type,
+            t.is_editable AS tag_is_editable,
+            t.owner_id AS tag_owner_id
         FROM 
             edge_devices d
         LEFT JOIN 
@@ -273,10 +283,17 @@ func GetAllDevicesWithApplications() ([]struct {
             applications a 
         ON 
             ai.app_id = a.id
+        LEFT JOIN 
+            device_tags dt 
+        ON 
+            d.id = dt.device_id
+        LEFT JOIN 
+            tags t 
+        ON 
+            dt.tag_id = t.id
         ORDER BY d.id;
     `
 
-	// Run the query
 	rows, err := DB.Query(query)
 	if err != nil {
 		log.Printf("Error executing query: %v", err)
@@ -284,7 +301,7 @@ func GetAllDevicesWithApplications() ([]struct {
 	}
 	defer rows.Close()
 
-	// Slice to hold the final raw results
+	// Slice to hold the raw results
 	var rawResults []struct {
 		DeviceID             int64
 		DeviceName           string
@@ -300,9 +317,14 @@ func GetAllDevicesWithApplications() ([]struct {
 		AppPath              string
 		AppDescription       string
 		AppVersion           string
+		TagID                *int64
+		TagName              *string
+		TagType              *string
+		TagIsEditable        *bool
+		TagOwnerID           *int64
 	}
 
-	// Iterate over the rows returned by the query
+	// Fetch and scan rows
 	for rows.Next() {
 		var result struct {
 			DeviceID             int64
@@ -319,17 +341,22 @@ func GetAllDevicesWithApplications() ([]struct {
 			AppPath              string
 			AppDescription       string
 			AppVersion           string
+			TagID                *int64
+			TagName              *string
+			TagType              *string
+			TagIsEditable        *bool
+			TagOwnerID           *int64
 		}
 
-		err := rows.Scan(&result.DeviceID, &result.DeviceName, &result.DeviceStatus, &result.DeviceLastContact, &result.DeviceConnectionType,
-			&result.Longitude, &result.Latitude, &result.DeviceIPAddress, &result.InstanceID, &result.AppName,
-			&result.AppStatus, &result.AppPath, &result.AppDescription, &result.AppVersion)
+		err := rows.Scan(&result.DeviceID, &result.DeviceName, &result.DeviceStatus, &result.DeviceLastContact,
+			&result.DeviceConnectionType, &result.Longitude, &result.Latitude, &result.DeviceIPAddress,
+			&result.InstanceID, &result.AppName, &result.AppStatus, &result.AppPath, &result.AppDescription, &result.AppVersion,
+			&result.TagID, &result.TagName, &result.TagType, &result.TagIsEditable, &result.TagOwnerID)
 		if err != nil {
 			log.Printf("Error scanning row: %v", err)
 			return nil, err
 		}
 
-		// Add the raw result to the slice
 		rawResults = append(rawResults, result)
 	}
 

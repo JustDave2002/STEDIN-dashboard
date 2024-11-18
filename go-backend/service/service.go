@@ -43,20 +43,32 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 				Latitude:       result.Latitude,
 				Longitude:      result.Longitude,
 				IPAddress:      result.DeviceIPAddress,
-				Applications:   []structs.ApplicationInstanceDTO{}, // Start with an empty slice
+				Applications:   []structs.ApplicationInstanceDTO{},
+				Tags:           []structs.Tag{},
 			}
 		}
 
-		// Now append the application instance to the correct device entry
-		appDTO := structs.ApplicationInstanceDTO{
-			InstanceID:  result.InstanceID,
-			Name:        result.AppName,
-			Status:      result.AppStatus,
-			Path:        result.AppPath,
-			Description: result.AppDescription,
-			Version:     result.AppVersion,
+		// Add application data
+		if result.InstanceID > 0 {
+			deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, structs.ApplicationInstanceDTO{
+				InstanceID:  result.InstanceID,
+				Name:        result.AppName,
+				Status:      result.AppStatus,
+				Path:        result.AppPath,
+				Description: result.AppDescription,
+				Version:     result.AppVersion,
+			})
 		}
-		deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, appDTO)
+		// Add tag data
+		if result.TagID != nil {
+			deviceMap[result.DeviceID].Tags = append(deviceMap[result.DeviceID].Tags, structs.Tag{
+				ID:         *result.TagID,
+				Name:       *result.TagName,
+				Type:       *result.TagType,
+				IsEditable: *result.TagIsEditable,
+				OwnerID:    result.TagOwnerID,
+			})
+		}
 	}
 
 	// Convert the map to a slice for returning
