@@ -180,3 +180,52 @@ func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 
 	return devices, nil
 }
+
+// GetApplicationInstancesByDeviceID retrieves application instance details for a specific device
+func GetApplicationInstancesByDeviceID(deviceID int64) ([]structs.ApplicationInstanceDTO, error) {
+	query := `
+        SELECT 
+            ai.id AS INSTANCEID, 
+            a.name, 
+            ai.status, 
+            ai.path, 
+            a.description, 
+            a.version
+        FROM 
+            application_instances ai
+        JOIN 
+            applications a 
+        ON 
+            ai.app_id = a.id
+        WHERE 
+            ai.device_id = ?
+    `
+
+	rows, err := DB.Query(query, deviceID)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var apps []structs.ApplicationInstanceDTO
+	for rows.Next() {
+		var app structs.ApplicationInstanceDTO
+		if err := rows.Scan(&app.InstanceID, &app.Name, &app.Status, &app.Path, &app.Description, &app.Version); err != nil {
+			log.Printf("Error scanning row: %v", err)
+			return nil, err
+		}
+		apps = append(apps, app)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error while iterating rows: %v", err)
+		return nil, err
+	}
+
+	if len(apps) == 0 {
+		log.Printf("No application instances found for deviceID: %d", deviceID)
+	}
+
+	return apps, nil
+}
