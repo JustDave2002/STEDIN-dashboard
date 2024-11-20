@@ -14,6 +14,7 @@ import "leaflet-draw/dist/leaflet.draw.css";
 
 // Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/StedinGeojson";
+import {getMapData} from "@/app/api/mapData/route";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -193,26 +194,42 @@ export default function InteractiveMap({ geoLevel = 0, filters }) {
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [isDeselectMode, setIsDeselectMode] = useState(false);
   const [mapKey, setMapKey] = useState(0);
-  const [lowLevelData, setLowLevelData] = useState(null);
+  const [lowLevelData, setLowLevelData] = useState([]);
 
+
+  // Fetch data from the API when the component mounts
   useEffect(() => {
     if (geoLevel === 1) {
-      const fetchLowLevelData = async () => {
+      async function fetchLowLevelData() {
         try {
-          const response = await fetch('http://localhost:8000/map');
-          if (response.ok) {
-            const data = await response.json();
-            setLowLevelData(data);
-          } else {
-            console.error('Failed to fetch low-level data');
-          }
+          const data = await getMapData()
+          setLowLevelData(data)
         } catch (error) {
-          console.error('Error fetching low-level data:', error);
+          console.error("Error fetching low-level data:", error)
         }
-      };
-      fetchLowLevelData();
+      }
+      fetchLowLevelData()
     }
-  }, [geoLevel]);
+  }, [geoLevel])
+
+  // useEffect(() => {
+  //   if (geoLevel === 1) {
+  //     const fetchLowLevelData = async () => {
+  //       try {
+  //         const response = await fetch('http://localhost:8000/map');
+  //         if (response.ok) {
+  //           const data = await response.json();
+  //           setLowLevelData(data);
+  //         } else {
+  //           console.error('Failed to fetch low-level data');
+  //         }
+  //       } catch (error) {
+  //         console.error('Error fetching low-level data:', error);
+  //       }
+  //     };
+  //     fetchLowLevelData();
+  //   }
+  // }, [geoLevel]);
 
   useEffect(() => {
     setSelectedItems([]);
