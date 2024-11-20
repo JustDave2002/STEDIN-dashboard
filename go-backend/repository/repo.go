@@ -395,3 +395,34 @@ func GetUserTags(userID int64) ([]string, error) {
 
 	return tags, nil
 }
+
+// GetAllMebers retrieves all mebers from the database
+func GetAllMebers() ([]structs.Meber, error) {
+	query := `SELECT m.id, m.name, r.id AS role_id, r.name AS role_name FROM mebers m LEFT JOIN meber_roles mr ON m.id = mr.meber_id LEFT JOIN roles r ON mr.role_id = r.id`
+
+	rows, err := DB.Query(query)
+	if err != nil {
+		log.Printf("Error retrieving mebers: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mebers []structs.Meber
+	for rows.Next() {
+		var meber structs.Meber
+		var role structs.Role
+		err := rows.Scan(&meber.ID, &meber.Name, &role.ID, &role.Name)
+		if err != nil {
+			log.Printf("Error scanning meber: %v", err)
+			return nil, err
+		}
+		meber.Roles = append(meber.Roles, role)
+		if err != nil {
+			log.Printf("Error scanning meber: %v", err)
+			return nil, err
+		}
+		mebers = append(mebers, meber)
+	}
+
+	return mebers, nil
+}

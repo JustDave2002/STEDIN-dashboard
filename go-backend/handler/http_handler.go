@@ -65,3 +65,17 @@ func GetAllDevicesMapHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(devices)
 }
+
+func GetAllMebersHandler(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Call the service function to get all mebers
+	mebers, err := service.GetAllMebers()
+	if err != nil {
+		http.Error(w, "Error retrieving mebers", http.StatusInternalServerError)
+		return
+	}
+
+	// Step 2: Set response headers and write the response as JSON
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(mebers)
+}
