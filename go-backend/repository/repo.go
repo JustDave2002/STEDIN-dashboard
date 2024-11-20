@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"main/structs"
+	"strings"
 	"time"
 )
 
@@ -102,7 +103,10 @@ func GetAllDevices() ([]structs.EdgeDevice, error) {
 }
 
 // TODO: Fix the lat long for the love of anything sane
-func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
+func GetAllDevicesForMap(tags []string) ([]structs.EdgeDeviceMapResponse, error) {
+	// Prepare query with tags
+	queryTags := "'" + strings.Join(tags, "','") + "'"
+
 	query := `
 		SELECT 
 			ed.id, 
@@ -118,12 +122,12 @@ func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 		FROM edge_devices ed
 		LEFT JOIN device_tags dt ON ed.id = dt.device_id
 		LEFT JOIN tags tg ON dt.tag_id = tg.id
-		WHERE tg.type = 'location'
+		WHERE tg.name IN (` + queryTags + `) AND tg.type = 'location'
 	`
 
 	rows, err := DB.Query(query)
 	if err != nil {
-		log.Printf("Error retrieving devices: %v", err)
+		log.Printf("Error retrieving devices for map: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -361,4 +365,33 @@ func GetAllDevicesWithApplications() ([]struct {
 	}
 
 	return rawResults, nil
+}
+
+func GetUserTags(userID int64) ([]string, error) {
+	query := `
+		SELECT DISTINCT tg.name
+		FROM meber_roles mr
+		JOIN role_tags rt ON mr.role_id = rt.role_id
+		JOIN tags tg ON rt.tag_id = tg.id
+		WHERE mr.meber_id = ?
+	`
+
+	rows, err := DB.Query(query, userID)
+	if err != nil {
+		log.Printf("Error retrieving user tags: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			log.Printf("Error scanning tag: %v", err)
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+
+	return tags, nil
 }

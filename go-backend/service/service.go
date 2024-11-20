@@ -14,8 +14,25 @@ func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 	return repository.GetAllDevices()
 }
 
-func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
-	return repository.GetAllDevicesForMap()
+func GetAllEdgeDevicesForMap(userID int64) ([]structs.EdgeDeviceMapResponse, error) {
+	// Get the user tags via RBAC
+	userTags, err := repository.GetUserTags(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If user has no tags, return empty
+	if len(userTags) == 0 {
+		return []structs.EdgeDeviceMapResponse{}, nil
+	}
+
+	// Call data layer to get devices filtered by user tags
+	devices, err := repository.GetAllDevicesForMap(userTags)
+	if err != nil {
+		return nil, err
+	}
+
+	return devices, nil
 }
 
 // GetAllDevicesWithApplications groups and converts data from the repository into DTO format
