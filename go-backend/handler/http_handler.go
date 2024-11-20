@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"main/middleware"
 	"net/http"
 	"strconv"
 
@@ -46,12 +47,20 @@ func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllDevicesMapHandler(w http.ResponseWriter, r *http.Request) {
-	devices, err := service.GetAllEdgeDevicesForMap()
+	// Step 1: Extract user ID from context
+	meberID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
+		return
+	}
+
+	devices, err := service.GetAllEdgeDevicesForMap(meberID)
 	if err != nil {
 		http.Error(w, "Error retrieving devices", http.StatusInternalServerError)
 		return
 	}
 
+	// Step 3: Respond with JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(devices)
