@@ -121,3 +121,9 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 
 	return devicesWithApps, nil
 }
+
+// GetAllMebers retrieves all mebers from the data layer
+func GetAllMebers() ([]structs.Meber, error) {
+	// Call data layer to get all mebers
+	return repository.GetAllMebers()
+}
