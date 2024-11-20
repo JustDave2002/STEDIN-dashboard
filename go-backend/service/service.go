@@ -127,3 +127,8 @@ func GetAllMebers() ([]structs.Meber, error) {
 	// Call data layer to get all mebers
 	return repository.GetAllMebers()
 }
+
+// GetMeberByID retrieves a meber from the repository layer by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	return repository.GetMeberByID(meberID)
+}
