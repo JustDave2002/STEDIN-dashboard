@@ -6,7 +6,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-var secretKey = []byte("your_secret_key")
+var SecretKey = []byte("your_secret_key")
 
 // VerifyToken verifies the JWT token and extracts the user ID
 func VerifyToken(tokenString string) (int64, error) {
@@ -15,7 +15,7 @@ func VerifyToken(tokenString string) (int64, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return secretKey, nil
+		return SecretKey, nil
 	})
 
 	if err != nil || !token.Valid {

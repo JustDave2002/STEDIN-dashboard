@@ -426,3 +426,21 @@ func GetAllMebers() ([]structs.Meber, error) {
 
 	return mebers, nil
 }
+
+// GetMeberByID retrieves a meber from the database by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	query := "SELECT id, name FROM mebers WHERE id = ?"
+	row := DB.QueryRow(query, meberID)
+
+	var meber structs.Meber
+	err := row.Scan(&meber.ID, &meber.Name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, err
+		}
+		log.Printf("Error retrieving meber by ID: %v", err)
+		return nil, err
+	}
+
+	return &meber, nil
+}
