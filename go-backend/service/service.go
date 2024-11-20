@@ -50,24 +50,43 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 
 		// Add application data
 		if result.InstanceID > 0 {
-			deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, structs.ApplicationInstanceDTO{
-				InstanceID:  result.InstanceID,
-				Name:        result.AppName,
-				Status:      result.AppStatus,
-				Path:        result.AppPath,
-				Description: result.AppDescription,
-				Version:     result.AppVersion,
-			})
+			appExists := false
+			for _, app := range deviceMap[result.DeviceID].Applications {
+				if app.InstanceID == result.InstanceID {
+					appExists = true
+					break
+				}
+			}
+			if !appExists {
+				deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, structs.ApplicationInstanceDTO{
+					InstanceID:  result.InstanceID,
+					Name:        result.AppName,
+					Status:      result.AppStatus,
+					Path:        result.AppPath,
+					Description: result.AppDescription,
+					Version:     result.AppVersion,
+				})
+			}
 		}
+
 		// Add tag data
 		if result.TagID != nil {
-			deviceMap[result.DeviceID].Tags = append(deviceMap[result.DeviceID].Tags, structs.Tag{
-				ID:         *result.TagID,
-				Name:       *result.TagName,
-				Type:       *result.TagType,
-				IsEditable: *result.TagIsEditable,
-				OwnerID:    result.TagOwnerID,
-			})
+			tagExists := false
+			for _, tag := range deviceMap[result.DeviceID].Tags {
+				if tag.ID == *result.TagID {
+					tagExists = true
+					break
+				}
+			}
+			if !tagExists {
+				deviceMap[result.DeviceID].Tags = append(deviceMap[result.DeviceID].Tags, structs.Tag{
+					ID:         *result.TagID,
+					Name:       *result.TagName,
+					Type:       *result.TagType,
+					IsEditable: *result.TagIsEditable,
+					OwnerID:    result.TagOwnerID,
+				})
+			}
 		}
 	}
 

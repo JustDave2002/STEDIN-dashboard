@@ -195,10 +195,6 @@ func seedEdgeDevice(db *sql.DB, index int) {
 	}
 
 	seedDeviceTag(db, deviceID, municipality)
-	isTeamFraude := rand.Intn(100) < 5
-	if isTeamFraude {
-		seedDeviceTag(db, deviceID, "fraude")
-	}
 
 	seedDeviceSensorsAndApplications(db, deviceID, status)
 }
@@ -245,6 +241,9 @@ func seedDeviceSensorsAndApplications(db *sql.DB, deviceID int64, deviceStatus s
 	for _, appName := range selectedApps {
 		neededSensors := requiredSensors[appName]
 
+		if appName == "Fraude Detectie" {
+			seedDeviceTag(db, deviceID, "fraude")
+		}
 		for _, sensor := range neededSensors {
 			seedDeviceSensor(db, deviceID, sensor)
 		}

@@ -1,7 +1,7 @@
 package structs
 
 type DeviceWithApplicationsDTO struct {
-	DeviceID       int64                    `json:"device_id"`
+	DeviceID       int64                    `json:"id"`
 	Name           string                   `json:"name"`
 	Status         string                   `json:"status"`
 	LastContact    string                   `json:"last_contact"` // Use string for JSON datetime formatting
@@ -15,7 +15,7 @@ type DeviceWithApplicationsDTO struct {
 }
 
 type ApplicationInstanceDTO struct {
-	InstanceID  int64  `json:"instance_id"`
+	InstanceID  int64  `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Version     string `json:"version"`
