@@ -2,9 +2,9 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"main/structs"
-	"strings"
 	"time"
 )
 
@@ -103,11 +103,9 @@ func GetAllDevices() ([]structs.EdgeDevice, error) {
 }
 
 // TODO: Fix the lat long for the love of anything sane
-func GetAllDevicesForMap(tags []string) ([]structs.EdgeDeviceMapResponse, error) {
-	// Prepare query with tags
-	queryTags := "'" + strings.Join(tags, "','") + "'"
-
-	query := `
+func GetAllDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
+	// Define the base query (without the WHERE clause)
+	baseQuery := `
 		SELECT 
 			ed.id, 
 			ed.name, 
@@ -122,8 +120,13 @@ func GetAllDevicesForMap(tags []string) ([]structs.EdgeDeviceMapResponse, error)
 		FROM edge_devices ed
 		LEFT JOIN device_tags dt ON ed.id = dt.device_id
 		LEFT JOIN tags tg ON dt.tag_id = tg.id
-		WHERE tg.name IN (` + queryTags + `) AND tg.type = 'location'
 	`
+
+	// Get the query with the necessary RBAC applied
+	query, err := applyRoleBasedAccess(meberID, baseQuery)
+	if err != nil {
+		return nil, fmt.Errorf("error applying role-based access: %w", err)
+	}
 
 	rows, err := DB.Query(query)
 	if err != nil {
@@ -235,7 +238,7 @@ func GetApplicationInstancesByDeviceID(deviceID int64) ([]structs.ApplicationIns
 }
 
 // Fetches all devices and their associated applications from the database
-func GetAllDevicesWithApplications() ([]struct {
+func GetAllDevicesWithApplications(meberID int64) ([]struct {
 	DeviceID             int64
 	DeviceName           string
 	DeviceStatus         string
@@ -256,7 +259,7 @@ func GetAllDevicesWithApplications() ([]struct {
 	TagIsEditable        *bool
 	TagOwnerID           *int64
 }, error) {
-	query := `
+	baseQuery := `
         SELECT 
             d.id AS device_id, 
             d.name AS device_name, 
@@ -297,6 +300,11 @@ func GetAllDevicesWithApplications() ([]struct {
             dt.tag_id = t.id
         ORDER BY d.id;
     `
+
+	query, err := applyRoleBasedAccess(meberID, baseQuery)
+	if err != nil {
+		return nil, fmt.Errorf("error applying role-based access: %w", err)
+	}
 
 	rows, err := DB.Query(query)
 	if err != nil {
@@ -443,4 +451,31 @@ func GetMeberByID(meberID int64) (*structs.Meber, error) {
 	}
 
 	return &meber, nil
+}
+
+func GetRolesForMeber(meberID int64) ([]structs.Role, error) {
+	query := `
+		SELECT r.id, r.name, r.is_restricted
+		FROM meber_roles mr
+		JOIN roles r ON mr.role_id = r.id
+		WHERE mr.meber_id = ?
+	`
+
+	rows, err := DB.Query(query, meberID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving roles for meber: %w", err)
+	}
+	defer rows.Close()
+
+	var roles []structs.Role
+	for rows.Next() {
+		var role structs.Role
+		err := rows.Scan(&role.ID, &role.Name, &role.IsRestricted)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning role: %w", err)
+		}
+		roles = append(roles, role)
+	}
+
+	return roles, nil
 }

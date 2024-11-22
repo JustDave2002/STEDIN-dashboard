@@ -15,19 +15,9 @@ func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 }
 
 func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
-	// Get the user tags via RBAC
-	meberTags, err := repository.GetMeberTags(meberID)
-	if err != nil {
-		return nil, err
-	}
-
-	// If user has no tags, return empty
-	if len(meberTags) == 0 {
-		return []structs.EdgeDeviceMapResponse{}, nil
-	}
 
 	// Call data layer to get devices filtered by user tags
-	devices, err := repository.GetAllDevicesForMap(meberTags)
+	devices, err := repository.GetAllDevicesForMap(meberID)
 	if err != nil {
 		return nil, err
 	}
@@ -36,9 +26,9 @@ func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, er
 }
 
 // GetAllDevicesWithApplications groups and converts data from the repository into DTO format
-func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error) {
+func GetAllDevicesWithApplications(meberID int64) ([]structs.DeviceWithApplicationsDTO, error) {
 	// Fetch raw data from repository
-	rawResults, err := repository.GetAllDevicesWithApplications()
+	rawResults, err := repository.GetAllDevicesWithApplications(meberID)
 	if err != nil {
 		log.Printf("Error fetching devices and applications: %v", err)
 		return nil, err

@@ -37,7 +37,12 @@ func GetDeviceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	devices, err := service.GetAllDevicesWithApplications()
+	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
+		return
+	}
+	devices, err := service.GetAllDevicesWithApplications(meberID)
 	if err != nil {
 		http.Error(w, "Error retrieving devices", http.StatusInternalServerError)
 		return
