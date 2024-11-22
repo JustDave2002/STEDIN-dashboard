@@ -8,10 +8,12 @@ import (
 )
 
 func RegisterDeviceHandlers(router *mux.Router) {
-	// TODO rework: for /map, make it so it returns what is needed for map (so change handlers, service, repo, etc)
-	router.Handle("/map", middleware.AuthMiddleware(http.HandlerFunc(handler.GetAllDevicesMapHandler))).Methods("GET")
+	router.Handle("/map", middleware.AuthenticateMeber(http.HandlerFunc(handler.GetAllDevicesMapHandler))).Methods("GET")
 	// TODO rework: for /devices, return devices with appropriate attributes: device info, tags, application
-	router.Handle("/devices", middleware.AuthMiddleware(http.HandlerFunc(handler.GetAllDevicesHandler))).Methods("GET")
+	router.Handle("/devices", middleware.AuthenticateMeber(http.HandlerFunc(handler.GetAllDevicesHandler))).Methods("GET")
+	router.HandleFunc("/devices", handler.GetAllDevicesHandler).Methods("GET")
+
+	// For handling meber functionality, AKA RBAC
 	router.HandleFunc("/mebers", handler.GetAllMebersHandler).Methods("GET")
 	router.HandleFunc("/api/login", handler.LoginHandler).Methods("POST")
 
