@@ -8,7 +8,7 @@ import (
 
 var SecretKey = []byte("your_secret_key") // Totally secure btw
 
-// VerifyToken verifies the JWT token and extracts the user ID
+// VerifyToken verifies the JWT token and extracts the meber ID
 func VerifyToken(tokenString string) (int64, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Ensure the signing method is correct
@@ -29,7 +29,7 @@ func VerifyToken(tokenString string) (int64, error) {
 	}
 
 	// Extract user ID from claims
-	meberIDFloat, ok := claims["meber_id"].(float64)
+	meberIDFloat, ok := claims["user_id"].(float64) // this HAS to be user_id sadly
 	if !ok {
 		return 0, errors.New("meber ID not found in token")
 	}
