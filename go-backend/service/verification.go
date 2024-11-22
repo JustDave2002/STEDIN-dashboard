@@ -29,7 +29,7 @@ func VerifyToken(tokenString string) (int64, error) {
 	}
 
 	// Extract user ID from claims
-	meberIDFloat, ok := claims["user_id"].(float64) // this HAS to be user_id sadly
+	meberIDFloat, ok := claims["meber_id"].(float64) // this HAS to be user_id sadly
 	if !ok {
 		return 0, errors.New("meber ID not found in token")
 	}
