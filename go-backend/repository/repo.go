@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"main/structs"
+	"strings"
 	"time"
 )
 
@@ -102,7 +103,10 @@ func GetAllDevices() ([]structs.EdgeDevice, error) {
 }
 
 // TODO: Fix the lat long for the love of anything sane
-func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
+func GetAllDevicesForMap(tags []string) ([]structs.EdgeDeviceMapResponse, error) {
+	// Prepare query with tags
+	queryTags := "'" + strings.Join(tags, "','") + "'"
+
 	query := `
 		SELECT 
 			ed.id, 
@@ -118,12 +122,12 @@ func GetAllDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
 		FROM edge_devices ed
 		LEFT JOIN device_tags dt ON ed.id = dt.device_id
 		LEFT JOIN tags tg ON dt.tag_id = tg.id
-		WHERE tg.type = 'location'
+		WHERE tg.name IN (` + queryTags + `) AND tg.type = 'location'
 	`
 
 	rows, err := DB.Query(query)
 	if err != nil {
-		log.Printf("Error retrieving devices: %v", err)
+		log.Printf("Error retrieving devices for map: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -361,4 +365,82 @@ func GetAllDevicesWithApplications() ([]struct {
 	}
 
 	return rawResults, nil
+}
+
+func GetMeberTags(meberID int64) ([]string, error) {
+	query := `
+		SELECT DISTINCT tg.name
+		FROM meber_roles mr
+		JOIN role_tags rt ON mr.role_id = rt.role_id
+		JOIN tags tg ON rt.tag_id = tg.id
+		WHERE mr.meber_id = ?
+	`
+
+	rows, err := DB.Query(query, meberID)
+	if err != nil {
+		log.Printf("Error retrieving user tags: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			log.Printf("Error scanning tag: %v", err)
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+
+	return tags, nil
+}
+
+// GetAllMebers retrieves all mebers from the database
+func GetAllMebers() ([]structs.Meber, error) {
+	query := `SELECT m.id, m.name, r.id AS role_id, r.name AS role_name FROM mebers m LEFT JOIN meber_roles mr ON m.id = mr.meber_id LEFT JOIN roles r ON mr.role_id = r.id`
+
+	rows, err := DB.Query(query)
+	if err != nil {
+		log.Printf("Error retrieving mebers: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var mebers []structs.Meber
+	for rows.Next() {
+		var meber structs.Meber
+		var role structs.Role
+		err := rows.Scan(&meber.ID, &meber.Name, &role.ID, &role.Name)
+		if err != nil {
+			log.Printf("Error scanning meber: %v", err)
+			return nil, err
+		}
+		meber.Roles = append(meber.Roles, role)
+		if err != nil {
+			log.Printf("Error scanning meber: %v", err)
+			return nil, err
+		}
+		mebers = append(mebers, meber)
+	}
+
+	return mebers, nil
+}
+
+// GetMeberByID retrieves a meber from the database by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	query := "SELECT id, name FROM mebers WHERE id = ?"
+	row := DB.QueryRow(query, meberID)
+
+	var meber structs.Meber
+	err := row.Scan(&meber.ID, &meber.Name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, err
+		}
+		log.Printf("Error retrieving meber by ID: %v", err)
+		return nil, err
+	}
+
+	return &meber, nil
 }

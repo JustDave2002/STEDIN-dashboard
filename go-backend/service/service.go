@@ -14,8 +14,25 @@ func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 	return repository.GetAllDevices()
 }
 
-func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
-	return repository.GetAllDevicesForMap()
+func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
+	// Get the user tags via RBAC
+	meberTags, err := repository.GetMeberTags(meberID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If user has no tags, return empty
+	if len(meberTags) == 0 {
+		return []structs.EdgeDeviceMapResponse{}, nil
+	}
+
+	// Call data layer to get devices filtered by user tags
+	devices, err := repository.GetAllDevicesForMap(meberTags)
+	if err != nil {
+		return nil, err
+	}
+
+	return devices, nil
 }
 
 // GetAllDevicesWithApplications groups and converts data from the repository into DTO format
@@ -103,4 +120,15 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 	// })
 
 	return devicesWithApps, nil
+}
+
+// GetAllMebers retrieves all mebers from the data layer
+func GetAllMebers() ([]structs.Meber, error) {
+	// Call data layer to get all mebers
+	return repository.GetAllMebers()
+}
+
+// GetMeberByID retrieves a meber from the repository layer by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	return repository.GetMeberByID(meberID)
 }
