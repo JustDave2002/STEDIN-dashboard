@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import DynamicMap from "@/components/DynamicMap";
+import { Search } from 'lucide-react'
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -10,8 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Search } from 'lucide-react'
-import { Button } from "@/components/ui/button"
 import { getMapData } from "@/app/api/mapData/route";
 
 export default function MapPage() {
@@ -24,29 +24,34 @@ export default function MapPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [mapData, setMapData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
+      setIsLoading(true);
       try {
         const data = await getMapData();
-        setMapData(data);
-        setFilteredData(data);
+        console.log("Fetched data:", data);
+        setMapData(Array.isArray(data) ? data : []);
+        setFilteredData(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Error fetching map data:", error);
+        setMapData([]);
+        setFilteredData([]);
+      } finally {
+        setIsLoading(false);
       }
     }
     fetchData();
   }, []);
 
-  const regioOptions = useMemo(() => 
-    Array.from(new Set(mapData.map(item => item.municipality))),
-    [mapData]
-  );
+  const regioOptions = useMemo(() => {
+    return Array.from(new Set(mapData.filter(item => item && item.municipality).map(item => item.municipality)));
+  }, [mapData]);
 
-  const applicatieOptions = useMemo(() => 
-    Array.from(new Set(mapData.map(item => item.applicatie))),
-    [mapData]
-  );
+  const applicatieOptions = useMemo(() => {
+    return Array.from(new Set(mapData.filter(item => item && item.applicatie).map(item => item.applicatie)));
+  }, [mapData]);
 
   const handleFilterChange = useCallback((filterType, value) => {
     setFilters(prevFilters => ({
@@ -65,16 +70,21 @@ export default function MapPage() {
 
   useEffect(() => {
     const filtered = mapData.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.municipality.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filters.status === "all" || item.status.toLowerCase() === filters.status.toLowerCase();
-      const matchesRegio = filters.regio === "all" || item.municipality.toLowerCase() === filters.regio.toLowerCase();
+      if (!item) return false;
+      const matchesSearch = (item.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+                            (item.municipality?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
+      const matchesStatus = filters.status === "all" || item.status?.toLowerCase() === filters.status.toLowerCase();
+      const matchesRegio = filters.regio === "all" || item.municipality?.toLowerCase() === filters.regio.toLowerCase();
       const matchesApplicatie = filters.applicatie === "all" || item.applicatie === filters.applicatie;
       
       return matchesSearch && matchesStatus && matchesRegio && matchesApplicatie;
     });
     setFilteredData(filtered);
   }, [mapData, searchTerm, filters]);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div>
@@ -93,39 +103,44 @@ export default function MapPage() {
         </div>
         <div className="flex items-center space-x-4">
           <span className="text-sm font-medium">Filter:</span>
-          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("status", value)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem key="all-status" value="all">All</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="offline">Offline</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("regio", value)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Regio" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem key="all-regio" value="all">All</SelectItem>
-              {regioOptions.map(regio => (
-                <SelectItem key={regio} value={regio}>{regio}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("applicatie", value)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Applicatie" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem key="all-applicatie" value="all">All</SelectItem>
-              {/* 2 errors vanwege geen value temp solution: comment out*/}
-              {/* {applicatieOptions.map(app => (
-                <SelectItem key={app} value={app}>{app}</SelectItem>
-              ))} */}
-            </SelectContent>
-          </Select>
+          <div className="space-y-1">
+            <Select id="status-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("status", value)}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Status: All</SelectItem>
+                <SelectItem value="online">Status: Online</SelectItem>
+                <SelectItem value="offline">Status: Offline</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Select id="regio-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("regio", value)}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Regio" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Regio: All</SelectItem>
+                {regioOptions.map(regio => (
+                  <SelectItem key={regio} value={regio}>Regio: {regio}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Select id="applicatie-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("applicatie", value)}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Applicatie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">App: All</SelectItem>
+                {applicatieOptions.map(app => (
+                  <SelectItem key={app} value={app}>App: {app}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
       <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
