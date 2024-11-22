@@ -102,41 +102,43 @@ export default function MapPage() {
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <span className="text-sm font-medium">Filter:</span>
-          <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium">Status:</span>
             <Select id="status-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("status", value)}>
               <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Status: All</SelectItem>
-                <SelectItem value="online">Status: Online</SelectItem>
-                <SelectItem value="offline">Status: Offline</SelectItem>
+              <SelectContent className="z-50">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="online">Online</SelectItem>
+                <SelectItem value="offline">Offline</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium">Regio:</span>
             <Select id="regio-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("regio", value)}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue placeholder="Regio" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Regio: All</SelectItem>
+              <SelectContent className="z-50">
+                <SelectItem value="all">All</SelectItem>
                 {regioOptions.map(regio => (
-                  <SelectItem key={regio} value={regio}>Regio: {regio}</SelectItem>
+                  <SelectItem key={regio} value={regio}>{regio}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium">App:</span>
             <Select id="applicatie-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("applicatie", value)}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue placeholder="Applicatie" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select..." />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">App: All</SelectItem>
+              <SelectContent className="z-50">
+                <SelectItem value="all">All</SelectItem>
                 {applicatieOptions.map(app => (
-                  <SelectItem key={app} value={app}>App: {app}</SelectItem>
+                  <SelectItem key={app} value={app}>{app}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
