@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -9,61 +9,98 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { X } from "lucide-react"
-import { getDeviceData } from "@/app/api/mapData/route"  // Import the API function
-import { formatDistanceToNow } from "date-fns"
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { X, ArrowUp, ArrowDown } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
-export default function DeviceTable() {
-  const [selectedDevice, setSelectedDevice] = useState(null)
-  const [selectedApplication, setSelectedApplication] = useState(null)
-  const [devices, setDevices] = useState([])  // State to store API data
-  const modalRef = useRef(null)
+export default function DeviceTable({ devices }) {
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const modalRef = useRef(null);
 
-  // Fetch data from the API when the component mounts
-  useEffect(() => {
-    async function fetchDevices() {
-      try {
-        const data = await getDeviceData()
-        setDevices(data)
-      } catch (error) {
-        console.error("Error fetching device data:", error)
+  // State for sorting
+  const [sortConfig, setSortConfig] = useState({
+    key: 'gemeente',
+    direction: 'asc'
+  });
+
+  // Handle sorting
+  const handleSort = (key) => {
+    setSortConfig((prevState) => {
+      let direction = 'asc';
+      if (prevState.key === key && prevState.direction === 'asc') {
+        direction = 'desc';
+      } else if (prevState.key === key && prevState.direction === 'desc') {
+        direction = 'asc'; // Or 'default' if cycling through default state
       }
+      return { key, direction };
+    });
+  };
+
+  // Sorted devices based on sortConfig
+  const sortedDevices = [...devices];
+  sortedDevices.sort((a, b) => {
+    let aValue, bValue;
+
+    switch (sortConfig.key) {
+      case 'name':
+        aValue = a.name;
+        bValue = b.name;
+        break;
+      case 'gemeente':
+        const aGemeenteTag = a.tags.find(tag => tag.type === 'location');
+        const bGemeenteTag = b.tags.find(tag => tag.type === 'location');
+        aValue = aGemeenteTag ? aGemeenteTag.name : '';
+        bValue = bGemeenteTag ? bGemeenteTag.name : '';
+        break;
+      case 'last_contact':
+        aValue = new Date(a.last_contact);
+        bValue = new Date(b.last_contact);
+        break;
+      default:
+        return 0;
     }
-    fetchDevices()
-  }, [])
+
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
 
   const handleRowClick = (device) => {
-    setSelectedDevice(device)
-    setSelectedApplication(null)
-  }
+    setSelectedDevice(device);
+    setSelectedApplication(null);
+  };
 
   const handleApplicationClick = (application) => {
-    setSelectedApplication(application)
-  }
+    setSelectedApplication(application);
+  };
 
   const handleCloseModal = () => {
-    setSelectedDevice(null)
-    setSelectedApplication(null)
-  }
+    setSelectedDevice(null);
+    setSelectedApplication(null);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (modalRef.current && !modalRef.current.contains(event.target)) {
-        handleCloseModal()
+        handleCloseModal();
       }
-    }
+    };
 
     if (selectedDevice || selectedApplication) {
-      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [selectedDevice, selectedApplication])
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [selectedDevice, selectedApplication]);
 
   return (
       <div className="relative">
@@ -71,31 +108,46 @@ export default function DeviceTable() {
           <TableCaption>List of Devices</TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
+              <TableHead onClick={() => handleSort('name')} className="cursor-pointer flex items-center">
+                Name
+                {sortConfig.key === 'name' && (
+                    sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-4 w-4" /> : <ArrowDown className="ml-1 h-4 w-4" />
+                )}
+              </TableHead>
               <TableHead>Applications</TableHead>
-              <TableHead>Gemeente</TableHead>
+              <TableHead onClick={() => handleSort('gemeente')} className="cursor-pointer flex items-center">
+                Gemeente
+                {sortConfig.key === 'gemeente' && (
+                    sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-4 w-4" /> : <ArrowDown className="ml-1 h-4 w-4" />
+                )}
+              </TableHead>
               <TableHead>Tags</TableHead>
-              <TableHead>Last Contact</TableHead>
+              <TableHead onClick={() => handleSort('last_contact')} className="cursor-pointer flex items-center">
+                Last Contact
+                {sortConfig.key === 'last_contact' && (
+                    sortConfig.direction === 'asc' ? <ArrowUp className="ml-1 h-4 w-4" /> : <ArrowDown className="ml-1 h-4 w-4" />
+                )}
+              </TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {devices.map((device) => (
-                <TableRow key={device.id} onClick={() => handleRowClick(device)} className="cursor-pointer hover:bg-muted">
+            {sortedDevices.map((device) => (
+                <TableRow key={device.device_id} onClick={() => handleRowClick(device)} className="cursor-pointer hover:bg-muted">
                   <TableCell className="font-medium">{device.name}</TableCell>
                   <TableCell>
                     {device.applications.map((app, index) => (
                         <Badge
                             key={index}
                             onClick={(e) => {
-                              e.stopPropagation()
-                              handleApplicationClick({ ...app, parentDevice: device })
+                              e.stopPropagation();
+                              handleApplicationClick({ ...app, parentDevice: device });
                             }}
                             className={`cursor-pointer bg-white border ${
                                 app.status === "online" ? "border-green-500 text-green-500" :
-                                    app.status === "offline" ? "border-red-500 text-red-500" :
+                                    app.status === "offline" ? "border-gray-500 text-gray-500" :
                                         app.status === "warning" ? "border-yellow-500 text-yellow-500" :
-                                            "border-gray-500 text-gray-500"
+                                            "border-red-500 text-red-500"
                             } px-2 py-1 mr-1`}
                         >
                           {app.name.length > 8 ? `${app.name.slice(0, 8)}...` : app.name}
@@ -137,9 +189,9 @@ export default function DeviceTable() {
                     <Badge
                         className={`${
                             device.status === "online" ? "bg-green-500 text-white" :
-                                device.status === "offline" ? "bg-red-500 text-white" :
+                                device.status === "offline" ? "bg-gray-500 text-white" :
                                     device.status === "app_issue" ? "bg-yellow-500 text-black" :
-                                        "bg-gray-500 text-white"
+                                        "bg-red-500 text-white"
                         }`}
                     >
                       {device.status}
@@ -165,8 +217,8 @@ export default function DeviceTable() {
                     <h3 className="font-semibold mb-2">General Information</h3>
                     <p><strong>Status:</strong> <span className={`badge ${
                         selectedDevice.status === "online" ? "bg-green-500 text-white" :
-                            selectedDevice.status === "offline" ? "bg-red-500 text-white" :
-                                "bg-gray-500 text-white"
+                            selectedDevice.status === "offline" ? "bg-gray-500 text-white" :
+                                "bg-red-500 text-white"
                     }`}>{selectedDevice.status}</span></p>
                     <p><strong>Gemeente:</strong> {selectedDevice.tags.find(tag => tag.type === "location")?.name}</p>
                     <p><strong>Last Contact:</strong> {formatDistanceToNow(new Date(selectedDevice.last_contact), { addSuffix: true })}</p>
@@ -181,8 +233,8 @@ export default function DeviceTable() {
                         >
                           {app.name} - <span className={`badge ${
                             app.status === "online" ? "bg-green-500 text-white" :
-                                app.status === "offline" ? "bg-red-500 text-white" :
-                                    "bg-gray-500 text-white"
+                                app.status === "offline" ? "bg-gray-500 text-white" :
+                                    "bg-red-500 text-white"
                         }`}>{app.status}</span>
                         </p>
                     ))}
@@ -207,8 +259,8 @@ export default function DeviceTable() {
                   <p><strong>Description:</strong> {selectedApplication.description}</p>
                   <p><strong>Status:</strong> <span className={`badge ${
                       selectedApplication.status === "online" ? "bg-green-500 text-white" :
-                          selectedApplication.status === "offline" ? "bg-red-500 text-white" :
-                              "bg-gray-500 text-white"
+                          selectedApplication.status === "offline" ? "bg-gray-500 text-white" :
+                              "bg-red-500 text-white"
                   }`}>{selectedApplication.status}</span></p>
                   <p><strong>Version:</strong> {selectedApplication.version}</p>
                   <p><strong>Path:</strong> {selectedApplication.path}</p>
@@ -218,5 +270,5 @@ export default function DeviceTable() {
             </div>
         )}
       </div>
-  )
+  );
 }
