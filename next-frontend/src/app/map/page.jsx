@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import DynamicMap from "@/components/DynamicMap";
 import {
   Select,
@@ -10,27 +10,71 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
+import { Search } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { getMapData } from "@/app/api/mapData/route";
 
 export default function MapPage() {
   const [geoLevel, setGeoLevel] = useState(0);
   const [filters, setFilters] = useState({
-    status: "",
-    regio: "",
-    applicatie: "",
+    status: "all",
+    regio: "all",
+    applicatie: "all",
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [mapData, setMapData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
 
-  const handleFilterChange = (filterType, value) => {
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const data = await getMapData();
+        setMapData(data);
+        setFilteredData(data);
+      } catch (error) {
+        console.error("Error fetching map data:", error);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const regioOptions = useMemo(() => 
+    Array.from(new Set(mapData.map(item => item.municipality))),
+    [mapData]
+  );
+
+  const applicatieOptions = useMemo(() => 
+    Array.from(new Set(mapData.map(item => item.applicatie))),
+    [mapData]
+  );
+
+  const handleFilterChange = useCallback((filterType, value) => {
     setFilters(prevFilters => ({
       ...prevFilters,
       [filterType]: value
     }));
-  };
+  }, []);
 
-  const handleGeoLevelChange = (level) => {
+  const handleGeoLevelChange = useCallback((level) => {
     setGeoLevel(level);
-  };
+  }, []);
+
+  const handleSearchChange = useCallback((e) => {
+    setSearchTerm(e.target.value);
+  }, []);
+
+  useEffect(() => {
+    const filtered = mapData.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            item.municipality.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filters.status === "all" || item.status.toLowerCase() === filters.status.toLowerCase();
+      const matchesRegio = filters.regio === "all" || item.municipality.toLowerCase() === filters.regio.toLowerCase();
+      const matchesApplicatie = filters.applicatie === "all" || item.applicatie === filters.applicatie;
+      
+      return matchesSearch && matchesStatus && matchesRegio && matchesApplicatie;
+    });
+    setFilteredData(filtered);
+  }, [mapData, searchTerm, filters]);
 
   return (
     <div>
@@ -38,40 +82,48 @@ export default function MapPage() {
         <div className="flex-1 mr-4">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input type="search" placeholder="Search..." className="pl-8" />
+            <Input 
+              type="search" 
+              placeholder="Search..." 
+              className="pl-8" 
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
           </div>
         </div>
         <div className="flex items-center space-x-4">
           <span className="text-sm font-medium">Filter:</span>
-          <Select onValueChange={(value) => handleFilterChange("status", value)}>
+          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("status", value)}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem key="all-status" value="all">All</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+              <SelectItem value="offline">Offline</SelectItem>
             </SelectContent>
           </Select>
-          <Select onValueChange={(value) => handleFilterChange("regio", value)}>
+          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("regio", value)}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Regio" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="north">North</SelectItem>
-              <SelectItem value="south">South</SelectItem>
-              <SelectItem value="east">East</SelectItem>
-              <SelectItem value="west">West</SelectItem>
+              <SelectItem key="all-regio" value="all">All</SelectItem>
+              {regioOptions.map(regio => (
+                <SelectItem key={regio} value={regio}>{regio}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Select onValueChange={(value) => handleFilterChange("applicatie", value)}>
+          <Select defaultValue="all" onValueChange={(value) => handleFilterChange("applicatie", value)}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Applicatie" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="app1">App 1</SelectItem>
-              <SelectItem value="app2">App 2</SelectItem>
-              <SelectItem value="app3">App 3</SelectItem>
+              <SelectItem key="all-applicatie" value="all">All</SelectItem>
+              {/* 2 errors vanwege geen value temp solution: comment out*/}
+              {/* {applicatieOptions.map(app => (
+                <SelectItem key={app} value={app}>{app}</SelectItem>
+              ))} */}
             </SelectContent>
           </Select>
         </div>
@@ -102,7 +154,7 @@ export default function MapPage() {
             </div>
           </div>
           <div className="aspect-[9/4]">
-            <DynamicMap geoLevel={geoLevel} filters={filters} />
+            <DynamicMap geoLevel={geoLevel} filters={filters} mapData={filteredData} />
           </div>
         </div>
       </div>
