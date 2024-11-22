@@ -14,20 +14,20 @@ func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 	return repository.GetAllDevices()
 }
 
-func GetAllEdgeDevicesForMap(userID int64) ([]structs.EdgeDeviceMapResponse, error) {
+func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
 	// Get the user tags via RBAC
-	userTags, err := repository.GetUserTags(userID)
+	meberTags, err := repository.GetMeberTags(meberID)
 	if err != nil {
 		return nil, err
 	}
 
 	// If user has no tags, return empty
-	if len(userTags) == 0 {
+	if len(meberTags) == 0 {
 		return []structs.EdgeDeviceMapResponse{}, nil
 	}
 
 	// Call data layer to get devices filtered by user tags
-	devices, err := repository.GetAllDevicesForMap(userTags)
+	devices, err := repository.GetAllDevicesForMap(meberTags)
 	if err != nil {
 		return nil, err
 	}

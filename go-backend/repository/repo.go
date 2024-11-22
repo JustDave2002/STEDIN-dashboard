@@ -367,7 +367,7 @@ func GetAllDevicesWithApplications() ([]struct {
 	return rawResults, nil
 }
 
-func GetUserTags(userID int64) ([]string, error) {
+func GetMeberTags(meberID int64) ([]string, error) {
 	query := `
 		SELECT DISTINCT tg.name
 		FROM meber_roles mr
@@ -376,7 +376,7 @@ func GetUserTags(userID int64) ([]string, error) {
 		WHERE mr.meber_id = ?
 	`
 
-	rows, err := DB.Query(query, userID)
+	rows, err := DB.Query(query, meberID)
 	if err != nil {
 		log.Printf("Error retrieving user tags: %v", err)
 		return nil, err

@@ -9,9 +9,9 @@ import (
 
 type key string
 
-const UserIDKey key = "userID"
+const MeberIDKey key = "meberID"
 
-// AuthMiddleware verifies the JWT token and adds the user ID to the request context
+// AuthMiddleware verifies the JWT token and adds the meber ID to the request context
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Step 1: Get the Authorization Header
@@ -30,14 +30,14 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		token := tokenParts[1]
 
 		// Step 3: Verify the token and extract user ID
-		userID, err := service.VerifyToken(token)
+		meberID, err := service.VerifyToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		// Step 4: Add the user ID to the request context
-		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+		ctx := context.WithValue(r.Context(), MeberIDKey, meberID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

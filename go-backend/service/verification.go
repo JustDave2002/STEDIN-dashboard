@@ -6,7 +6,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-var SecretKey = []byte("your_secret_key")
+var SecretKey = []byte("your_secret_key") // Totally secure btw
 
 // VerifyToken verifies the JWT token and extracts the user ID
 func VerifyToken(tokenString string) (int64, error) {
@@ -29,11 +29,11 @@ func VerifyToken(tokenString string) (int64, error) {
 	}
 
 	// Extract user ID from claims
-	userIDFloat, ok := claims["user_id"].(float64)
+	meberIDFloat, ok := claims["meber_id"].(float64)
 	if !ok {
-		return 0, errors.New("user ID not found in token")
+		return 0, errors.New("meber ID not found in token")
 	}
-	userID := int64(userIDFloat)
+	meberID := int64(meberIDFloat)
 
-	return userID, nil
+	return meberID, nil
 }

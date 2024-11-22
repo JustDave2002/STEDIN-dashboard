@@ -49,8 +49,8 @@ func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllDevicesMapHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract user ID from context
-	meberID, ok := r.Context().Value(middleware.UserIDKey).(int64)
+	// Step 1: Extract meber ID from context
+	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
 	if !ok {
 		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
 		return
@@ -101,10 +101,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 2: Generate a JWT for the user
+	// Step 2: Generate a JWT for the meber
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": meber.ID,
-		"exp":     time.Now().Add(time.Hour * 72).Unix(), // Token expiry (72 hours)
+		"meber_id": meber.ID,
+		"exp":      time.Now().Add(time.Hour * 72).Unix(), // Token expiry (72 hours)
 	})
 
 	// Step 3: Sign the token with the secret key
