@@ -31,7 +31,7 @@ L.Marker.prototype.options.icon = OnlineIcon;
 
 const getRegionColor = (regionData) => {
   if (!regionData) return "rgba(155, 155, 155, 0.5)"; // default color for regions with no data
-
+  
   const { devices, online, offline } = regionData;
   const total = devices;
 
@@ -77,8 +77,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
   const markerClusterGroupRef = useRef();
 
   useEffect(() => {
-    console.log("MapContent effect, geoLevel:", geoLevel, "mapData:", mapData);
-    if (geoLevel === 1 && mapData && mapData.length > 0) {
+    if (geoLevel === 1 && mapData) {
       const bounds = L.latLngBounds(mapData.map((feature) => [feature.latitude, feature.longitude]));
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [50, 50] });
@@ -95,7 +94,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
   }, [map]);
 
   useEffect(() => {
-    if (geoLevel === 1 && mapData && mapData.length > 0) {
+    if (geoLevel === 1 && mapData) {
       if (markerClusterGroupRef.current) {
         map.removeLayer(markerClusterGroupRef.current);
       }
@@ -182,8 +181,6 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
 }
 
 export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
-  console.log("InteractiveMap props:", { geoLevel, filters, mapData });
-  
   const [selectedItems, setSelectedItems] = useState([]);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [isDeselectMode, setIsDeselectMode] = useState(false);
@@ -191,27 +188,20 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
   const [aggregatedData, setAggregatedData] = useState({});
 
   useEffect(() => {
-    console.log("Aggregating data, mapData:", mapData);
-    if (mapData && mapData.length > 0) {
-      const aggregated = mapData.reduce((acc, item) => {
-        if (!item || !item.municipality) return acc;
-        if (!acc[item.municipality]) {
-          acc[item.municipality] = { devices: 0, online: 0, offline: 0 };
-        }
-        acc[item.municipality].devices++;
-        if (item.status && item.status.toLowerCase() === 'online') {
-          acc[item.municipality].online++;
-        } else {
-          acc[item.municipality].offline++;
-        }
-        return acc;
-      }, {});
-      console.log("Aggregated data:", aggregated);
-      setAggregatedData(aggregated);
-    } else {
-      console.log("No map data to aggregate");
-      setAggregatedData({});
-    }
+    // Aggregate data for high-level view
+    const aggregated = mapData.reduce((acc, item) => {
+      if (!acc[item.municipality]) {
+        acc[item.municipality] = { devices: 0, online: 0, offline: 0 };
+      }
+      acc[item.municipality].devices++;
+      if (item.status.toLowerCase() === 'online') {
+        acc[item.municipality].online++;
+      } else {
+        acc[item.municipality].offline++;
+      }
+      return acc;
+    }, {});
+    setAggregatedData(aggregated);
   }, [mapData]);
 
   useEffect(() => {
@@ -256,7 +246,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
       }
     }
   }, [isMultiSelect, geoLevel]);
-
+  
   const handleDragSelect = useCallback((bounds) => {
     if (geoLevel === 0) {
       const selectedRegions = stedinGeojson.features.filter(feature => {
@@ -436,7 +426,10 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
         {/* Selected card */}
         <Card>
           <CardHeader>
-            <CardTitle>Selected {geoLevel === 0 ? "Region" : "Edge Computer"}{selectedItems.length > 1 && "s"}</CardTitle>
+            <CardTitle>
+              Selected {geoLevel === 0 ? "Region" : "Edge Computer"}
+              {selectedItems.length > 1 && "s"} ({selectedItems.length})
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-h-[500px] overflow-y-auto pr-2">
