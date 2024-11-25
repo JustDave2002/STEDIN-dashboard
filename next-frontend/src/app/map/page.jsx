@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import DynamicMap from "@/components/DynamicMap";
-import { Search } from 'lucide-react'
+import { Search, PlusCircle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -13,22 +13,21 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { getMapData } from "@/app/api/mapData/route";
-
-// Debounce function
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
-  };
-};
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import debounce from "lodash.debounce";
 
 export default function MapPage() {
   const [geoLevel, setGeoLevel] = useState(0);
   const [filters, setFilters] = useState({
-    status: "all",
-    regio: "all",
-    applicatie: "all",
+    status: [],
+    regio: [],
+    applicatie: [],
+  });
+  const [selectedFilters, setSelectedFilters] = useState({
+    status: [],
+    regio: [],
+    applicatie: [],
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -44,6 +43,23 @@ export default function MapPage() {
         console.log("Fetched data:", data);
         setMapData(Array.isArray(data) ? data : []);
         setFilteredData(Array.isArray(data) ? data : []);
+
+        // Extract unique filter values
+        const statusSet = new Set();
+        const regioSet = new Set();
+        const applicatieSet = new Set();
+
+        data.forEach((item) => {
+          if (item.status) statusSet.add(item.status);
+          if (item.municipality) regioSet.add(item.municipality);
+          if (item.applicatie) applicatieSet.add(item.applicatie);
+        });
+
+        setFilters({
+          status: Array.from(statusSet),
+          regio: Array.from(regioSet),
+          applicatie: Array.from(applicatieSet),
+        });
       } catch (error) {
         console.error("Error fetching map data:", error);
         setMapData([]);
@@ -53,21 +69,6 @@ export default function MapPage() {
       }
     }
     fetchData();
-  }, []);
-
-  const regioOptions = useMemo(() => {
-    return Array.from(new Set(mapData.filter(item => item && item.municipality).map(item => item.municipality)));
-  }, [mapData]);
-
-  const applicatieOptions = useMemo(() => {
-    return Array.from(new Set(mapData.filter(item => item && item.applicatie).map(item => item.applicatie)));
-  }, [mapData]);
-
-  const handleFilterChange = useCallback((filterType, value) => {
-    setFilters(prevFilters => ({
-      ...prevFilters,
-      [filterType]: value
-    }));
   }, []);
 
   const handleGeoLevelChange = useCallback((level) => {
@@ -93,14 +94,24 @@ export default function MapPage() {
       if (!item) return false;
       const matchesSearch = (item.name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || false) ||
                             (item.municipality?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || false);
-      const matchesStatus = filters.status === "all" || item.status?.toLowerCase() === filters.status.toLowerCase();
-      const matchesRegio = filters.regio === "all" || item.municipality?.toLowerCase() === filters.regio.toLowerCase();
-      const matchesApplicatie = filters.applicatie === "all" || item.applicatie === filters.applicatie;
+      const matchesStatus = selectedFilters.status.length === 0 || selectedFilters.status.includes(item.status);
+      const matchesRegio = selectedFilters.regio.length === 0 || selectedFilters.regio.includes(item.municipality);
+      const matchesApplicatie = selectedFilters.applicatie.length === 0 || selectedFilters.applicatie.includes(item.applicatie);
       
       return matchesSearch && matchesStatus && matchesRegio && matchesApplicatie;
     });
     setFilteredData(filtered);
-  }, [mapData, debouncedSearchTerm, filters]);
+  }, [mapData, debouncedSearchTerm, selectedFilters]);
+
+  const resetFilters = () => {
+    setSelectedFilters({
+      status: [],
+      regio: [],
+      applicatie: [],
+    });
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+  };
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -122,47 +133,129 @@ export default function MapPage() {
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium">Status:</span>
-            <Select id="status-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("status", value)}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Select..." />
-              </SelectTrigger>
-              <SelectContent className="z-50">
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="online">Online</SelectItem>
-                <SelectItem value="offline">Offline</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium">Regio:</span>
-            <Select id="regio-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("regio", value)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select..." />
-              </SelectTrigger>
-              <SelectContent className="z-50">
-                <SelectItem value="all">All</SelectItem>
-                {regioOptions.map(regio => (
-                  <SelectItem key={regio} value={regio}>{regio}</SelectItem>
+          <span className="text-sm font-medium">Filter:</span>
+          
+          {/* Status Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[120px] justify-between">
+                {selectedFilters.status.length > 0
+                  ? `Status (${selectedFilters.status.length})`
+                  : "Status"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-4">
+              <div className="flex flex-col space-y-2">
+                {filters.status.map((status, index) => (
+                  <div key={index} className="flex items-center">
+                    <Checkbox
+                      checked={selectedFilters.status.includes(status)}
+                      onCheckedChange={(checked) => {
+                        setSelectedFilters((prev) => {
+                          const newStatus = checked
+                            ? [...prev.status, status]
+                            : prev.status.filter((s) => s !== status);
+                          return { ...prev, status: newStatus };
+                        });
+                      }}
+                    />
+                    <span className="ml-2">{status}</span>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium">App:</span>
-            <Select id="applicatie-filter" defaultValue="all" onValueChange={(value) => handleFilterChange("applicatie", value)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select..." />
-              </SelectTrigger>
-              <SelectContent className="z-50">
-                <SelectItem value="all">All</SelectItem>
-                {applicatieOptions.map(app => (
-                  <SelectItem key={app} value={app}>{app}</SelectItem>
+                <Button
+                  variant="link"
+                  onClick={() =>
+                    setSelectedFilters((prev) => ({ ...prev, status: [] }))
+                  }
+                >
+                  Clear Status
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Regio Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[120px] justify-between">
+                {selectedFilters.regio.length > 0
+                  ? `Regio (${selectedFilters.regio.length})`
+                  : "Regio"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-4">
+              <div className="flex flex-col space-y-2 max-h-[200px] overflow-y-auto">
+                {filters.regio.map((regio, index) => (
+                  <div key={index} className="flex items-center">
+                    <Checkbox
+                      checked={selectedFilters.regio.includes(regio)}
+                      onCheckedChange={(checked) => {
+                        setSelectedFilters((prev) => {
+                          const newRegio = checked
+                            ? [...prev.regio, regio]
+                            : prev.regio.filter((r) => r !== regio);
+                          return { ...prev, regio: newRegio };
+                        });
+                      }}
+                    />
+                    <span className="ml-2">{regio}</span>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </div>
+              <Button
+                variant="link"
+                onClick={() =>
+                  setSelectedFilters((prev) => ({ ...prev, regio: [] }))
+                }
+              >
+                Clear Regio
+              </Button>
+            </PopoverContent>
+          </Popover>
+
+          {/* Applicatie Filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[120px] justify-between">
+                {selectedFilters.applicatie.length > 0
+                  ? `App (${selectedFilters.applicatie.length})`
+                  : "App"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-4">
+              <div className="flex flex-col space-y-2">
+                {filters.applicatie.map((app, index) => (
+                  <div key={index} className="flex items-center">
+                    <Checkbox
+                      checked={selectedFilters.applicatie.includes(app)}
+                      onCheckedChange={(checked) => {
+                        setSelectedFilters((prev) => {
+                          const newApps = checked
+                            ? [...prev.applicatie, app]
+                            : prev.applicatie.filter((a) => a !== app);
+                          return { ...prev, applicatie: newApps };
+                        });
+                      }}
+                    />
+                    <span className="ml-2">{app}</span>
+                  </div>
+                ))}
+                <Button
+                  variant="link"
+                  onClick={() =>
+                    setSelectedFilters((prev) => ({ ...prev, applicatie: [] }))
+                  }
+                >
+                  Clear App
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Reset Filters */}
+          <Button variant="link" onClick={resetFilters}>
+            Reset Filters
+          </Button>
         </div>
       </div>
       <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
@@ -191,7 +284,7 @@ export default function MapPage() {
             </div>
           </div>
           <div className="aspect-[9/4]">
-            <DynamicMap geoLevel={geoLevel} filters={filters} mapData={filteredData} />
+            <DynamicMap geoLevel={geoLevel} filters={selectedFilters} mapData={filteredData} />
           </div>
         </div>
       </div>
