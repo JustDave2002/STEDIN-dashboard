@@ -16,4 +16,8 @@ func RegisterDeviceHandlers(router *mux.Router) {
 	router.HandleFunc("/mebers", handler.GetAllMebersHandler).Methods("GET")
 	router.HandleFunc("/api/login", handler.LoginHandler).Methods("POST")
 
+	router.HandleFunc("/appstore", handler.AppStoreHandler).Methods("GET")
+	router.Handle("/eligible-devices", middleware.AuthenticateMeber(http.HandlerFunc(handler.EligibleDevicesHandler))).Methods("POST")
+	router.Handle("/add-applications", middleware.AuthenticateMeber(http.HandlerFunc(handler.AddApplicationsToDevicesHandler))).Methods("POST")
+
 }
