@@ -14,14 +14,21 @@ func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
 	return repository.GetAllDevices()
 }
 
-func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
-	return repository.GetAllDevicesForMap()
+func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
+
+	// Call data layer to get devices filtered by user tags
+	devices, err := repository.GetAllDevicesForMap(meberID)
+	if err != nil {
+		return nil, err
+	}
+
+	return devices, nil
 }
 
 // GetAllDevicesWithApplications groups and converts data from the repository into DTO format
-func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error) {
+func GetAllDevicesWithApplications(meberID int64) ([]structs.DeviceWithApplicationsDTO, error) {
 	// Fetch raw data from repository
-	rawResults, err := repository.GetAllDevicesWithApplications()
+	rawResults, err := repository.GetAllDevicesWithApplications(meberID)
 	if err != nil {
 		log.Printf("Error fetching devices and applications: %v", err)
 		return nil, err
@@ -103,4 +110,15 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 	// })
 
 	return devicesWithApps, nil
+}
+
+// GetAllMebers retrieves all mebers from the data layer
+func GetAllMebers() ([]structs.Meber, error) {
+	// Call data layer to get all mebers
+	return repository.GetAllMebers()
+}
+
+// GetMeberByID retrieves a meber from the repository layer by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	return repository.GetMeberByID(meberID)
 }
