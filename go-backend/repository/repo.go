@@ -275,11 +275,11 @@ func GetAllDevicesWithApplications(meberID int64) ([]struct {
             ai.path AS app_path, 
             a.description AS app_description, 
             a.version AS app_version,
-            t.id AS tag_id,
-            t.name AS tag_name,
-            t.type AS tag_type,
-            t.is_editable AS tag_is_editable,
-            t.owner_id AS tag_owner_id
+            tg.id AS tag_id,
+            tg.name AS tag_name,
+            tg.type AS tag_type,
+            tg.is_editable AS tag_is_editable,
+            tg.owner_id AS tag_owner_id
         FROM 
             edge_devices d
         LEFT JOIN 
@@ -295,10 +295,10 @@ func GetAllDevicesWithApplications(meberID int64) ([]struct {
         ON 
             d.id = dt.device_id
         LEFT JOIN 
-            tags t 
+            tags tg 
         ON 
-            dt.tag_id = t.id
-        ORDER BY d.id;
+            dt.tag_id = tg.id
+        ORDER BY d.id
     `
 
 	query, err := applyRoleBasedAccess(meberID, baseQuery)
