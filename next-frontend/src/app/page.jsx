@@ -1,3 +1,5 @@
+"use client"
+
 import {
   Card,
   CardContent,
@@ -5,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { useState, useEffect } from 'react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -18,9 +21,34 @@ import {
   MonitorPlay,
   RefreshCcw,
 } from "lucide-react"
+import { getMapData } from '@/app/api/mapData/route'
 import DynamicMap from "@/components/DynamicMap";
 
 export default function Dashboard() {
+  const [mapData, setMapData] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true)
+      try {
+        const data = await getMapData()
+        console.log("Fetched map data:", data) // Debug log
+        setMapData(data || [])
+      } catch (error) {
+        console.error("Error fetching map data:", error)
+        setMapData([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
@@ -125,7 +153,7 @@ export default function Dashboard() {
 
       <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
         <div className="aspect-[9/4] bg-sky-100 rounded-lg">
-        <DynamicMap />
+        <DynamicMap geoLevel={0} filters={{}} mapData={mapData}/>
         </div>
       </div>
       <Card>
