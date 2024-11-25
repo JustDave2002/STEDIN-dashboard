@@ -1,30 +1,45 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback } from "react";
+import debounce from "lodash.debounce";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, PlusCircle, ArrowUp, ArrowDown } from "lucide-react";
-import DeviceTable from './device-table';
-import { getDeviceData } from "@/app/api/mapData/route";  // Import the API function
+import { Search, PlusCircle } from "lucide-react";
+import DeviceTable from "./device-table";
+import { getDeviceData } from "@/app/api/mapData/route"; // Import the API function
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function DevicePage() {
   const [devices, setDevices] = useState([]);
   const [filteredDevices, setFilteredDevices] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(""); // Add debounced state
   const [filters, setFilters] = useState({
     status: [],
     applicatie: [],
-    gemeente: []
+    gemeente: [],
   });
   const [selectedFilters, setSelectedFilters] = useState({
     status: [],
     applicatie: [],
-    gemeente: []
+    gemeente: [],
   });
+
+  // Debounce the search term update
+  const updateDebouncedSearch = useCallback(
+      debounce((term) => setDebouncedSearchTerm(term), 300),
+      []
+  );
+
+  // Handle search term change with debounce
+  const handleSearchChange = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    updateDebouncedSearch(term);
+  };
 
   // Fetch data from the API when the component mounts
   useEffect(() => {
@@ -39,17 +54,17 @@ export default function DevicePage() {
         const applicatieSet = new Set();
         const gemeenteSet = new Set();
 
-        data.forEach(device => {
+        data.forEach((device) => {
           statusSet.add(device.status);
 
           // Extract gemeente from tags of type 'location'
-          const locationTag = device.tags.find(tag => tag.type === 'location');
+          const locationTag = device.tags.find((tag) => tag.type === "location");
           if (locationTag) {
             gemeenteSet.add(locationTag.name);
           }
 
           // Extract application names
-          device.applications.forEach(app => {
+          device.applications.forEach((app) => {
             applicatieSet.add(app.name);
           });
         });
@@ -57,9 +72,8 @@ export default function DevicePage() {
         setFilters({
           status: Array.from(statusSet),
           applicatie: Array.from(applicatieSet),
-          gemeente: Array.from(gemeenteSet)
+          gemeente: Array.from(gemeenteSet),
         });
-
       } catch (error) {
         console.error("Error fetching device data:", error);
       }
@@ -74,48 +88,56 @@ export default function DevicePage() {
 
     // Apply status filter
     if (selectedFilters.status.length > 0) {
-      filtered = filtered.filter(device => selectedFilters.status.includes(device.status));
+      filtered = filtered.filter((device) =>
+          selectedFilters.status.includes(device.status)
+      );
     }
 
     // Apply applicatie filter
     if (selectedFilters.applicatie.length > 0) {
-      filtered = filtered.filter(device =>
-          device.applications.some(app => selectedFilters.applicatie.includes(app.name))
+      filtered = filtered.filter((device) =>
+          device.applications.some((app) =>
+              selectedFilters.applicatie.includes(app.name)
+          )
       );
     }
 
     // Apply gemeente filter
     if (selectedFilters.gemeente.length > 0) {
-      filtered = filtered.filter(device => {
-        const locationTag = device.tags.find(tag => tag.type === 'location');
+      filtered = filtered.filter((device) => {
+        const locationTag = device.tags.find((tag) => tag.type === "location");
         return locationTag && selectedFilters.gemeente.includes(locationTag.name);
       });
     }
 
-    // Apply search term
-    if (searchTerm.trim() !== '') {
-      const lowerSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(device => {
+    // Apply search term (using debouncedSearchTerm)
+    if (debouncedSearchTerm.trim() !== "") {
+      const lowerSearchTerm = debouncedSearchTerm.toLowerCase();
+      filtered = filtered.filter((device) => {
         const deviceNameMatch = device.name.toLowerCase().includes(lowerSearchTerm);
         const statusMatch = device.status.toLowerCase().includes(lowerSearchTerm);
-        const tagMatch = device.tags.some(tag => tag.name.toLowerCase().includes(lowerSearchTerm));
-        const appMatch = device.applications.some(app => app.name.toLowerCase().includes(lowerSearchTerm));
+        const tagMatch = device.tags.some((tag) =>
+            tag.name.toLowerCase().includes(lowerSearchTerm)
+        );
+        const appMatch = device.applications.some((app) =>
+            app.name.toLowerCase().includes(lowerSearchTerm)
+        );
         return deviceNameMatch || statusMatch || tagMatch || appMatch;
       });
     }
 
     setFilteredDevices(filtered);
-
-  }, [devices, selectedFilters, searchTerm]);
+  }, [devices, selectedFilters, debouncedSearchTerm]);
 
   // Function to reset all filters and search term
   const resetFilters = () => {
     setSelectedFilters({
       status: [],
       applicatie: [],
-      gemeente: []
+      gemeente: [],
     });
-    setSearchTerm('');
+    setSearchTerm("");
+    setDebouncedSearchTerm(""); // Reset debounced term
   };
 
   return (
@@ -130,7 +152,7 @@ export default function DevicePage() {
                   placeholder="Search..."
                   className="pl-8"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchChange}
               />
             </div>
           </div>
@@ -143,7 +165,9 @@ export default function DevicePage() {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-[120px] justify-between">
-                  {selectedFilters.status.length > 0 ? `Status (${selectedFilters.status.length})` : 'Status'}
+                  {selectedFilters.status.length > 0
+                      ? `Status (${selectedFilters.status.length})`
+                      : "Status"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[200px] p-4">
@@ -166,7 +190,9 @@ export default function DevicePage() {
                   ))}
                   <Button
                       variant="link"
-                      onClick={() => setSelectedFilters((prev) => ({ ...prev, status: [] }))}
+                      onClick={() =>
+                          setSelectedFilters((prev) => ({ ...prev, status: [] }))
+                      }
                   >
                     Clear Status
                   </Button>
@@ -178,7 +204,9 @@ export default function DevicePage() {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-[120px] justify-between">
-                  {selectedFilters.applicatie.length > 0 ? `Applicatie (${selectedFilters.applicatie.length})` : 'Applicatie'}
+                  {selectedFilters.applicatie.length > 0
+                      ? `Applicatie (${selectedFilters.applicatie.length})`
+                      : "Applicatie"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[200px] p-4">
@@ -201,7 +229,9 @@ export default function DevicePage() {
                   ))}
                   <Button
                       variant="link"
-                      onClick={() => setSelectedFilters((prev) => ({ ...prev, applicatie: [] }))}
+                      onClick={() =>
+                          setSelectedFilters((prev) => ({ ...prev, applicatie: [] }))
+                      }
                   >
                     Clear Applicatie
                   </Button>
@@ -213,11 +243,13 @@ export default function DevicePage() {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-[120px] justify-between">
-                  {selectedFilters.gemeente.length > 0 ? `Gemeente (${selectedFilters.gemeente.length})` : 'Gemeente'}
+                  {selectedFilters.gemeente.length > 0
+                      ? `Gemeente (${selectedFilters.gemeente.length})`
+                      : "Gemeente"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[200px] p-4">
-                <div className="flex flex-col space-y-2">
+                <div className="flex flex-col space-y-2 max-h-[200px] overflow-y-auto">
                   {filters.gemeente.map((gem, index) => (
                       <div key={index} className="flex items-center">
                         <Checkbox
@@ -234,35 +266,36 @@ export default function DevicePage() {
                         <span className="ml-2">{gem}</span>
                       </div>
                   ))}
-                  <Button
-                      variant="link"
-                      onClick={() => setSelectedFilters((prev) => ({ ...prev, gemeente: [] }))}
-                  >
-                    Clear Gemeente
-                  </Button>
                 </div>
+                <Button
+                    variant="link"
+                    onClick={() =>
+                        setSelectedFilters((prev) => ({ ...prev, gemeente: [] }))
+                    }
+                >
+                  Clear Gemeente
+                </Button>
               </PopoverContent>
             </Popover>
 
-            {/* Reset Filters Button */}
-            <Button variant="secondary" onClick={resetFilters}>
+
+            {/* Reset Filters */}
+            <Button variant="link" onClick={resetFilters}>
               Reset Filters
             </Button>
-
-            {/* Add Device Button */}
-            <Link href="/create-device">
-              <Button className="ml-4">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Device
-              </Button>
-            </Link>
           </div>
+
+          {/* Add Device Button */}
+          <Link href="/devices/new">
+            <Button className="ml-4">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Device
+            </Button>
+          </Link>
         </div>
 
         {/* Device Table */}
-        <div>
-          <DeviceTable devices={filteredDevices} />
-        </div>
+        <DeviceTable devices={filteredDevices} />
       </div>
   );
 }
