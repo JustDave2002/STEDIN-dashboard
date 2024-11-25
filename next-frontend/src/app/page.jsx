@@ -63,10 +63,10 @@ export default function Dashboard() {
   const onlineDevices = deviceData.filter(device => device.status === 'online').length
   const offlineDevices = totalDevices - onlineDevices
 
-  const applications = deviceData.flatMap(device => device.applications || [])
-  const activeApps = applications.filter(app => app.status === 'online').length
-  const downApps = applications.filter(app => app.status === 'offline').length
-  const maintenanceApps = applications.filter(app => app.status === 'maintenance').length
+  const applications = deviceData.flatMap(device => device.applications || []);
+  const activeApps = applications.filter(app => app.status === 'online').length;
+  const downApps = applications.filter(app => ['offline', 'app_issue', 'error'].includes(app.status)).length;
+  const maintenanceApps = applications.filter(app => app.status === 'maintenance').length;  
 
   const alerts = deviceData.flatMap(device => device.alerts || [])
   const totalAlerts = alerts.length
