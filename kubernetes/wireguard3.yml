@@ -1,0 +1,259 @@
+############################################################
+# Global requirements - Run on all hosts
+############################################################
+- hosts: all
+  become: true
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+          - wireguard
+        state: present
+
+    - name: Ensure containerd is started
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: no
+
+    - name: Ensure the directory /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes apt key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+        dest: /tmp/Release.key
+
+    - name: Add Kubernetes apt key to keyring
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet, kubeadm, and kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Hold kubelet, kubeadm, and kubectl at the current version
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    - name: Generate WireGuard private key
+      command: wg genkey
+      register: wg_private_key
+      changed_when: false
+
+    - name: Generate WireGuard public key
+      shell: echo "{{ wg_private_key.stdout }}" | wg pubkey
+      register: wg_public_key
+      changed_when: false
+
+############################################################
+# Master-specific tasks
+############################################################
+- hosts: master
+  become: true
+  vars:
+    wireguard_cidr: "10.0.0.0/24"
+    master_ip: "10.0.0.1"
+    kube_ports:
+      - 6443  # API server port
+      - 2379  # etcd server client API
+      - 2380  # etcd server peer API
+      - 10250 # kubelet API
+      - 10251 # kube-scheduler
+      - 10252 # kube-controller-manager
+      - 10257 # kube-controller-manager (secure)
+      - 10259 # Kube-scheduler (secure)
+
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name:
+          - iptables
+        state: present
+
+    - name: Create WireGuard configuration file for master
+      copy:
+        dest: /etc/wireguard/wg0.conf
+        content: |
+          [Interface]
+          Address = {{ master_ip }}/24
+          ListenPort = 51820
+          PrivateKey = {{ wg_private_key.stdout }}
+          PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o {{ ansible_default_ipv4.interface }} -j MASQUERADE
+          PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o {{ ansible_default_ipv4.interface }} -j MASQUERADE
+        mode: "0600"
+
+    - name: Enable and start WireGuard service on master
+      service:
+        name: wg-quick@wg0
+        enabled: yes
+        state: started
+      ignore_errors: true
+
+    - name: Ensure Kubernetes ports are open in iptables
+      shell: |
+        {% for port in kube_ports %}
+        iptables -A INPUT -p tcp --dport {{ port }} -j ACCEPT
+        {% endfor %}
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Initialize Kubernetes cluster
+      command: kubeadm init --apiserver-advertise-address={{ master_ip }} --pod-network-cidr=10.244.0.0/16
+      register: kubeadm_init_output
+      ignore_errors: true
+
+    - name: Ensure .kube directory exists for specified user
+      file:
+        path: "/home/{{ ansible_user }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Copy Kubernetes admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "/home/{{ ansible_user }}/.kube/config"
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+
+    - name: Execute mount command to make / shared
+      shell: mount --make-shared /
+
+    - name: Install Calico network plugin
+      become: yes
+      become_user: "{{ ansible_user }}"
+      shell: |
+        kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+    - name: Generate join command for worker nodes
+      command: kubeadm token create --print-join-command
+      register: join_command
+      changed_when: false
+
+    - name: Save join command to a file on the master
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: "/tmp/kubeadm_join_command.txt"
+        mode: "0600"
+
+############################################################
+# Worker-specific tasks
+############################################################
+- hosts: worker
+  become: true
+  vars:
+    wireguard_cidr: "10.0.0.0/24"
+  tasks:
+
+    - name: Assign unique WireGuard IP to worker
+      set_fact:
+        wg_ip: "10.0.0.{{ inventory_hostname | regex_replace('.*-(\\d+)', '\\1') | int + 1 }}"
+
+    - name: Create WireGuard configuration file for worker
+      copy:
+        dest: /etc/wireguard/wg0.conf
+        content: |
+          [Interface]
+          Address = {{ wg_ip }}/24
+          PrivateKey = {{ wg_private_key.stdout }}
+          
+          [Peer]
+          PublicKey = {{ hostvars[groups['master'][0]].wg_public_key.stdout }}
+          Endpoint = {{ hostvars[groups['master'][0]].ansible_default_ipv4.address }}:51820
+          AllowedIPs = {{ wireguard_cidr }}
+          PersistentKeepalive = 25
+        mode: "0600"
+
+    - name: Enable and start WireGuard service on worker
+      service:
+        name: wg-quick@wg0
+        enabled: yes
+        state: started
+
+- hosts: master
+  become: true
+  vars:
+    wireguard_cidr: "10.0.0.0/24"
+  tasks:
+    # Master configuration update
+    - name: Gather worker WireGuard peer info
+      set_fact:
+        worker_peers: |
+          {% for worker in groups['worker'] %}
+          [Peer]
+          PublicKey = {{ hostvars[worker].wg_public_key.stdout }}
+          AllowedIPs = {{ hostvars[worker].wg_ip }}/32
+          {% endfor %}
+
+    - name: Append worker peers to master WireGuard config
+      lineinfile:
+        path: /etc/wireguard/wg0.conf
+        line: "{{ item }}"
+        insertafter: '[Interface]'
+        state: present
+      with_items: "{{ worker_peers.split('\n') }}"
+      run_once: true
+
+    - name: Bring down WireGuard interface
+      shell: wg-quick down wg0
+      ignore_errors: true
+
+    - name: Restart WireGuard service
+      service:
+        name: wg-quick@wg0
+        state: restarted
+
+- hosts: worker
+  become: true
+  tasks:
+    - name: Fetch join command from master
+      slurp:
+        src: /tmp/kubeadm_join_command.txt
+      register: join_command_content
+      delegate_to: "{{ groups['master'][0] }}"
+
+    - name: Save the join command on the worker node
+      copy:
+        content: "{{ join_command_content.content | b64decode }}"
+        dest: /tmp/kubeadm_join_command.txt
+        mode: '0700'
+
+    - name: Join the Kubernetes cluster
+      shell: bash /tmp/kubeadm_join_command.txt
