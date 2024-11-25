@@ -757,8 +757,8 @@ func CheckDeviceEligibility(deviceID int64, appID int64) (bool, *string, error) 
 //}
 
 func AddApplicationInstance(deviceID int64, appID int64) error {
-	query := "INSERT INTO application_instances (device_id, app_id, status) VALUES (?, ?, 'warning')"
-	_, err := DB.Exec(query, deviceID, appID)
+	query := "INSERT INTO application_instances (device_id, app_id, status, path) VALUES (?, ?, 'warning', ?)"
+	_, err := DB.Exec(query, deviceID, appID, "/path/to/newly created app")
 	if err != nil {
 		log.Printf("Error adding application instance for device %d and app %d: %v", deviceID, appID, err)
 		return err
