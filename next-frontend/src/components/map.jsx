@@ -6,6 +6,8 @@ import { EditControl } from "react-leaflet-draw";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
@@ -14,6 +16,7 @@ import "leaflet-draw/dist/leaflet.draw.css";
 
 // Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/StedinGeojson";
+//import { getMapData } from "@/app/api/mapData/route";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -75,6 +78,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
   const map = useMap();
   const featureGroupRef = useRef();
   const markerClusterGroupRef = useRef();
+  const editControlRef = useRef();
 
   useEffect(() => {
     if (geoLevel === 1 && mapData) {
@@ -134,6 +138,13 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
     featureGroupRef.current.clearLayers();
   };
 
+  // Reset EditControl when mapData changes
+  useEffect(() => {
+    if (editControlRef.current) {
+      editControlRef.current._toolbars.draw._modes.rectangle.handler.disable();
+    }
+  }, [mapData]);
+
   return (
     <>
       {geoLevel === 0 && (
@@ -160,6 +171,7 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
       )}
       <FeatureGroup ref={featureGroupRef}>
         <EditControl
+          ref={editControlRef}
           position="topright"
           onCreated={handleCreated}
           draw={{
@@ -173,6 +185,10 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
             circlemarker: false,
             marker: false,
             polyline: false,
+          }}
+          edit={{
+            edit: false,
+            remove: false,
           }}
         />
       </FeatureGroup>
@@ -211,7 +227,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
 
   useEffect(() => {
     setMapKey(prev => prev + 1);
-  }, [isMultiSelect, isDeselectMode]);
+  }, [isMultiSelect, isDeselectMode, mapData]);
 
   const handleItemClick = useCallback((itemName, municipality, status) => {
     if (geoLevel === 0) {
@@ -316,6 +332,15 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
       )
     );
   };
+
+  //const handleRegionChange = (region) => {
+  //  setSelectedRegion(region);
+  //  if (region !== "all") {
+  //    setSelectedItems([region]);
+  //  } else {
+  //    setSelectedItems([]);
+  //  }
+  //};
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
@@ -425,11 +450,11 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
         </Card>
         {/* Selected card */}
         <Card>
-          <CardHeader>
-            <CardTitle>
-              Selected {geoLevel === 0 ? "Region" : "Edge Computer"}
-              {selectedItems.length > 1 && "s"} ({selectedItems.length})
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Selected {geoLevel === 0 ? "Region" : "Edge Computer"}{selectedItems.length > 1 && "s"}
             </CardTitle>
+            <Badge variant="secondary">{selectedItems.length}</Badge>
           </CardHeader>
           <CardContent>
             <div className="max-h-[500px] overflow-y-auto pr-2">

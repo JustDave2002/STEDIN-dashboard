@@ -14,6 +14,15 @@ import {
 import { Input } from "@/components/ui/input"
 import { getMapData } from "@/app/api/mapData/route";
 
+// Debounce function
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
 export default function MapPage() {
   const [geoLevel, setGeoLevel] = useState(0);
   const [filters, setFilters] = useState({
@@ -22,6 +31,7 @@ export default function MapPage() {
     applicatie: "all",
   });
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [mapData, setMapData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,15 +74,25 @@ export default function MapPage() {
     setGeoLevel(level);
   }, []);
 
+  // Debounced search handler
+  const debouncedSearch = useCallback(
+    debounce((value) => {
+      setDebouncedSearchTerm(value);
+    }, 300),
+    []
+  );
+
   const handleSearchChange = useCallback((e) => {
-    setSearchTerm(e.target.value);
-  }, []);
+    const value = e.target.value;
+    setSearchTerm(value);
+    debouncedSearch(value);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     const filtered = mapData.filter(item => {
       if (!item) return false;
-      const matchesSearch = (item.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-                            (item.municipality?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
+      const matchesSearch = (item.name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || false) ||
+                            (item.municipality?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || false);
       const matchesStatus = filters.status === "all" || item.status?.toLowerCase() === filters.status.toLowerCase();
       const matchesRegio = filters.regio === "all" || item.municipality?.toLowerCase() === filters.regio.toLowerCase();
       const matchesApplicatie = filters.applicatie === "all" || item.applicatie === filters.applicatie;
@@ -80,7 +100,7 @@ export default function MapPage() {
       return matchesSearch && matchesStatus && matchesRegio && matchesApplicatie;
     });
     setFilteredData(filtered);
-  }, [mapData, searchTerm, filters]);
+  }, [mapData, debouncedSearchTerm, filters]);
 
   if (isLoading) {
     return <div>Loading...</div>;
