@@ -213,7 +213,7 @@ export default function MapPage() {
             </PopoverContent>
           </Popover>
 
-          {/* Applicatie Filter */}
+          {/* Applicatie Filter
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[120px] justify-between">
@@ -250,7 +250,7 @@ export default function MapPage() {
                 </Button>
               </div>
             </PopoverContent>
-          </Popover>
+          </Popover> */}
 
           {/* Reset Filters */}
           <Button variant="link" onClick={resetFilters}>

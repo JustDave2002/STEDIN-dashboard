@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from 'react'
 import {
   Card,
   CardContent,
@@ -7,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { useState, useEffect } from 'react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -21,23 +21,28 @@ import {
   MonitorPlay,
   RefreshCcw,
 } from "lucide-react"
-import { getMapData } from '@/app/api/mapData/route'
-import DynamicMap from "@/components/DynamicMap";
+import { getMapData, getDeviceData } from '@/app/api/mapData/route'
+import DynamicMap from "@/components/DynamicMap"
 
 export default function Dashboard() {
   const [mapData, setMapData] = useState([])
+  const [deviceData, setDeviceData] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true)
       try {
-        const data = await getMapData()
-        console.log("Fetched map data:", data) // Debug log
-        setMapData(data || [])
+        const [mapResponse, deviceResponse] = await Promise.all([
+          getMapData(),
+          getDeviceData()
+        ])
+        setMapData(mapResponse || [])
+        setDeviceData(deviceResponse || [])
       } catch (error) {
-        console.error("Error fetching map data:", error)
-        setMapData([])
+        console.error("Error fetching data:", error)
+        setError(error.message)
       } finally {
         setIsLoading(false)
       }
@@ -48,6 +53,25 @@ export default function Dashboard() {
   if (isLoading) {
     return <div>Loading...</div>
   }
+
+  if (error) {
+    return <div>Error: {error}</div>
+  }
+
+  // Calculate summary statistics
+  const totalDevices = deviceData.length
+  const onlineDevices = deviceData.filter(device => device.status === 'online').length
+  const offlineDevices = totalDevices - onlineDevices
+
+  const applications = deviceData.flatMap(device => device.applications || []);
+  const activeApps = applications.filter(app => app.status === 'online').length;
+  const downApps = applications.filter(app => ['offline', 'app_issue', 'error'].includes(app.status)).length;
+  const maintenanceApps = applications.filter(app => app.status === 'maintenance').length;  
+
+  const alerts = deviceData.flatMap(device => device.alerts || [])
+  const totalAlerts = alerts.length
+  const criticalAlerts = alerts.filter(alert => alert.severity === 'critical').length
+  const resolvedAlerts = alerts.filter(alert => alert.status === 'resolved').length
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -64,21 +88,21 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Total Devices:</span>
-                <span className="text-2xl font-bold">1,245</span>
+                <span className="text-2xl font-bold">{totalDevices}</span>
               </div>
               <div className="flex items-center justify-between text-green-600">
                 <div className="flex items-center gap-2">
                   <MonitorPlay className="w-4 h-4" />
                   <span className="text-sm">Online Devices:</span>
                 </div>
-                <span className="text-2xl font-bold">1,200</span>
+                <span className="text-2xl font-bold">{onlineDevices}</span>
               </div>
               <div className="flex items-center justify-between text-red-600">
                 <div className="flex items-center gap-2">
                   <MonitorOff className="w-4 h-4" />
                   <span className="text-sm">Offline Devices:</span>
                 </div>
-                <span className="text-2xl font-bold">45</span>
+                <span className="text-2xl font-bold">{offlineDevices}</span>
               </div>
             </div>
           </CardContent>
@@ -97,21 +121,21 @@ export default function Dashboard() {
                   <Circle className="w-4 h-4 fill-current" />
                   <span className="text-sm">Active Applications:</span>
                 </div>
-                <span className="text-2xl font-bold">825</span>
+                <span className="text-2xl font-bold">{activeApps}</span>
               </div>
               <div className="flex items-center justify-between text-red-600">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" />
                   <span className="text-sm">Down Applications:</span>
                 </div>
-                <span className="text-2xl font-bold">5</span>
+                <span className="text-2xl font-bold">{downApps}</span>
               </div>
               <div className="flex items-center justify-between text-yellow-600">
                 <div className="flex items-center gap-2">
                   <RefreshCcw className="w-4 h-4" />
                   <span className="text-sm">Maintenance:</span>
                 </div>
-                <span className="text-2xl font-bold">2</span>
+                <span className="text-2xl font-bold">{maintenanceApps}</span>
               </div>
             </div>
           </CardContent>
@@ -128,8 +152,8 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <span className="text-sm">Total Alerts:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">10</span>
-                  <Badge>New</Badge>
+                  <span className="text-2xl font-bold">{totalAlerts}</span>
+                  {totalAlerts > 0 && <Badge>New</Badge>}
                 </div>
               </div>
               <div className="flex items-center justify-between text-red-600">
@@ -137,14 +161,14 @@ export default function Dashboard() {
                   <AlertCircle className="w-4 h-4" />
                   <span className="text-sm">Critical Alerts:</span>
                 </div>
-                <span className="text-2xl font-bold">3</span>
+                <span className="text-2xl font-bold">{criticalAlerts}</span>
               </div>
               <div className="flex items-center justify-between text-green-600">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
                   <span className="text-sm">Resolved Alerts:</span>
                 </div>
-                <span className="text-2xl font-bold">7</span>
+                <span className="text-2xl font-bold">{resolvedAlerts}</span>
               </div>
             </div>
           </CardContent>
@@ -153,7 +177,7 @@ export default function Dashboard() {
 
       <div className="p-6 col-span-3 bg-sky-50 rounded-lg">
         <div className="aspect-[9/4] bg-sky-100 rounded-lg">
-        <DynamicMap geoLevel={0} filters={{}} mapData={mapData}/>
+          <DynamicMap geoLevel={0} filters={{}} mapData={mapData}/>
         </div>
       </div>
       <Card>
@@ -162,13 +186,24 @@ export default function Dashboard() {
           <CardDescription>Recent system activities</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert>
-            <Activity className="w-4 h-4" />
-            <AlertTitle>No Activity</AlertTitle>
-            <AlertDescription>
-              No activity logs available at the moment.
-            </AlertDescription>
-          </Alert>
+          {alerts.length > 0 ? (
+            <ul className="space-y-2">
+              {alerts.slice(0, 5).map((alert, index) => (
+                <li key={index} className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  <span>{alert.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Alert>
+              <Activity className="w-4 h-4" />
+              <AlertTitle>No Activity</AlertTitle>
+              <AlertDescription>
+                No activity logs available at the moment.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     </div>
