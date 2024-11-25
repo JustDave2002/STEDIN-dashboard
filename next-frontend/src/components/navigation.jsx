@@ -118,10 +118,10 @@ export default function Navigation() {
               Users
             </Button>
           </Link>
-          <Link href="/settings" passHref legacyBehavior>
+          <Link href="/appstore" passHref legacyBehavior>
             <Button variant="ghost" className="flex items-center" as="a">
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              App store
             </Button>
           </Link>
         </div>
