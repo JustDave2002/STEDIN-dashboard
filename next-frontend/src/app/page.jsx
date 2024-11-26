@@ -60,13 +60,15 @@ export default function Dashboard() {
 
   // Calculate summary statistics
   const totalDevices = deviceData.length
-  const onlineDevices = deviceData.filter(device => device.status === 'online').length
-  const offlineDevices = totalDevices - onlineDevices
+  const onlineDevices = deviceData.filter(device =>[ 'app_issue', 'online'].includes(device.status)).length;
+  const erroredDevices = deviceData.filter(device => ['error'].includes(device.status)).length;
+  const offlineDevices = deviceData.filter(device => ['offline'].includes(device.status)).length;
 
   const applications = deviceData.flatMap(device => device.applications || []);
   const activeApps = applications.filter(app => app.status === 'online').length;
-  const downApps = applications.filter(app => ['offline', 'app_issue', 'error'].includes(app.status)).length;
-  const maintenanceApps = applications.filter(app => app.status === 'maintenance').length;  
+  const erroredApps = applications.filter(app => ['error'].includes(app.status)).length;
+  const downApps = applications.filter(app => ['offline'].includes(app.status)).length;
+  const maintenanceApps = applications.filter(app => app.status === 'maintenance').length;
 
   const alerts = deviceData.flatMap(device => device.alerts || [])
   const totalAlerts = alerts.length
@@ -100,6 +102,13 @@ export default function Dashboard() {
               <div className="flex items-center justify-between text-red-600">
                 <div className="flex items-center gap-2">
                   <MonitorOff className="w-4 h-4" />
+                  <span className="text-sm">Errored Devices:</span>
+                </div>
+                <span className="text-2xl font-bold">{erroredDevices}</span>
+              </div>
+              <div className="flex items-center justify-between text-grey-600">
+                <div className="flex items-center gap-2">
+                  <MonitorOff className="w-4 h-4" />
                   <span className="text-sm">Offline Devices:</span>
                 </div>
                 <span className="text-2xl font-bold">{offlineDevices}</span>
@@ -118,21 +127,28 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-green-600">
                 <div className="flex items-center gap-2">
-                  <Circle className="w-4 h-4 fill-current" />
+                  <Circle className="w-4 h-4 fill-current"/>
                   <span className="text-sm">Active Applications:</span>
                 </div>
                 <span className="text-2xl font-bold">{activeApps}</span>
               </div>
               <div className="flex items-center justify-between text-red-600">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
+                  <AlertCircle className="w-4 h-4"/>
+                  <span className="text-sm">Errored Applications:</span>
+                </div>
+                <span className="text-2xl font-bold">{erroredApps}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-600">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4"/>
                   <span className="text-sm">Down Applications:</span>
                 </div>
                 <span className="text-2xl font-bold">{downApps}</span>
               </div>
               <div className="flex items-center justify-between text-yellow-600">
                 <div className="flex items-center gap-2">
-                  <RefreshCcw className="w-4 h-4" />
+                  <RefreshCcw className="w-4 h-4"/>
                   <span className="text-sm">Maintenance:</span>
                 </div>
                 <span className="text-2xl font-bold">{maintenanceApps}</span>
@@ -145,7 +161,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium">Alerts & notifications</CardTitle>
-            <Activity className="w-4 h-4 text-muted-foreground" />
+            <Activity className="w-4 h-4 text-muted-foreground"/>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
