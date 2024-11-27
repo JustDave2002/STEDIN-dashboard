@@ -6,7 +6,6 @@ import { EditControl } from "react-leaflet-draw";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
@@ -40,12 +39,6 @@ const getRegionColor = (regionData) => {
   if (total === 0) return "rgba(155, 155, 155, 0.5)"; // default color for regions with no devices
 
   const offlineRatio = offline / total;
-
-  // Create a more sensitive gradient
-  // 0% offline: pure green (0, 255, 0)
-  // 0.5% offline: yellow-green (127, 255, 0)
-  // 1% offline: orange (255, 165, 0)
-  // 2%+ offline: red (255, 0, 0)
 
   let r, g, b;
 
@@ -114,14 +107,39 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
 
         // Only create a marker if it's selected or not in deselect mode
         if (!isDeselectMode || isSelected) {
-          return L.marker([latitude, longitude], { icon })
+          return L.marker([latitude, longitude], { icon, status })
             .bindPopup(name)
             .on('click', () => onItemClick(name, municipality, status));
         }
         return null;
       }).filter(Boolean); // Remove null values
 
-      const markerClusterGroup = L.markerClusterGroup();
+      const markerClusterGroup = L.markerClusterGroup({
+        maxClusterRadius: 50,
+        iconCreateFunction: (cluster) => {
+          const childMarkers = cluster.getAllChildMarkers();
+          const hasIssue = childMarkers.some(marker => 
+            ['error', 'app_issue', 'offline'].includes(marker.options.status.toLowerCase())
+          );
+          
+          const className = hasIssue ? 'marker-cluster-red' : 'marker-cluster-green';
+          
+          return L.divIcon({
+            html: `<div><span>${childMarkers.length}</span></div>`,
+            className: `marker-cluster ${className}`,
+            iconSize: L.point(40, 40)
+          });
+        },
+        // Disable all animations for better performance
+        animate: false,
+        // Remove default cluster styles
+        removeOutsideVisibleBounds: true,
+        disableClusteringAtZoom: 19,
+        spiderfyOnMaxZoom: true,
+        chunkedLoading: true,
+        zoomToBoundsOnClick: true
+      });
+
       markerClusterGroup.addLayers(markers);
       map.addLayer(markerClusterGroup);
       markerClusterGroupRef.current = markerClusterGroup;
@@ -321,6 +339,8 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
       case "online":
         return "text-green-500";
       case "offline":
+      case "error":
+      case "app_issue":
         return "text-red-500";
       default:
         return "text-gray-500";
@@ -435,18 +455,19 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm">Offline Edge Computer</span>
+                    <span className="text-sm">Offline/Error/App Issue Edge Computer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">5</div>
+                    <span className="text-sm">Cluster with all Online Edge Computers</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">5</div>
+                    <span className="text-sm">Cluster with at least one Offline/Error/App Issue Edge Computer</span>
                   </div>
                 </>
               )}
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-sm">Select Rectangle</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-sm">Deselect Rectangle</span>
-              </div>
+
             </div>
           </CardContent>
         </Card>

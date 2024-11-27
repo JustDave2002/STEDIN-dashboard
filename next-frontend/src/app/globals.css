@@ -60,6 +60,56 @@ body {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
+
+  /* Marker Cluster Custom Styles */
+  .marker-cluster {
+    background-clip: padding-box;
+    border-radius: 50%;
+  }
+
+  .marker-cluster div {
+    width: 30px;
+    height: 30px;
+    margin-left: 5px;
+    margin-top: 5px;
+    text-align: center;
+    border-radius: 15px;
+    font-size: 12px;
+    color: #fff;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .marker-cluster-green {
+    background-color: rgba(49, 196, 141, 0.6);
+  }
+
+  .marker-cluster-green div {
+    background-color: rgba(49, 196, 141, 0.8);
+  }
+
+  .marker-cluster-red {
+    background-color: rgba(239, 68, 68, 0.6);
+  }
+
+  .marker-cluster-red div {
+    background-color: rgba(239, 68, 68, 0.8);
+  }
+
+  /* Hide default cluster styles */
+  .marker-cluster-small,
+  .marker-cluster-medium,
+  .marker-cluster-large {
+    background: none !important;
+  }
+
+  .marker-cluster-small div,
+  .marker-cluster-medium div,
+  .marker-cluster-large div {
+    background: none !important;
+  }
 }
 
 @layer base {
