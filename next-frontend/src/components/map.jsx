@@ -16,7 +16,6 @@ import "leaflet-draw/dist/leaflet.draw.css";
 
 // Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/StedinGeojson";
-//import { getMapData } from "@/app/api/mapData/route";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -44,25 +43,25 @@ const getRegionColor = (regionData) => {
 
   // Create a more sensitive gradient
   // 0% offline: pure green (0, 255, 0)
-  // 1% offline: yellow-green (127, 255, 0)
-  // 5% offline: orange (255, 165, 0)
-  // 10%+ offline: red (255, 0, 0)
+  // 0.5% offline: yellow-green (127, 255, 0)
+  // 1% offline: orange (255, 165, 0)
+  // 2%+ offline: red (255, 0, 0)
 
   let r, g, b;
 
   if (offlineRatio === 0) {
     [r, g, b] = [0, 255, 0];
-  } else if (offlineRatio <= 0.01) {
+  } else if (offlineRatio <= 0.005) {
     const t = offlineRatio / 0.01;
     r = Math.round(127 * t);
     g = 255;
     b = 0;
-  } else if (offlineRatio <= 0.05) {
+  } else if (offlineRatio <= 0.01) {
     const t = (offlineRatio - 0.01) / 0.04;
     r = Math.round(127 + 128 * t);
     g = Math.round(255 - 90 * t);
     b = 0;
-  } else if (offlineRatio <= 0.1) {
+  } else if (offlineRatio <= 0.02) {
     const t = (offlineRatio - 0.05) / 0.05;
     r = 255;
     g = Math.round(165 - 165 * t);
@@ -113,17 +112,21 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
 
         let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
 
-        return L.marker([latitude, longitude], { icon })
-          .bindPopup(name)
-          .on('click', () => onItemClick(name, municipality, status));
-      });
+        // Only create a marker if it's selected or not in deselect mode
+        if (!isDeselectMode || isSelected) {
+          return L.marker([latitude, longitude], { icon })
+            .bindPopup(name)
+            .on('click', () => onItemClick(name, municipality, status));
+        }
+        return null;
+      }).filter(Boolean); // Remove null values
 
       const markerClusterGroup = L.markerClusterGroup();
       markerClusterGroup.addLayers(markers);
       map.addLayer(markerClusterGroup);
       markerClusterGroupRef.current = markerClusterGroup;
     }
-  }, [geoLevel, mapData, selectedItems, map, onItemClick]);
+  }, [geoLevel, mapData, selectedItems, map, onItemClick, isDeselectMode]);
 
   const handleCreated = (e) => {
     const layer = e.layer;
@@ -333,15 +336,6 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
     );
   };
 
-  //const handleRegionChange = (region) => {
-  //  setSelectedRegion(region);
-  //  if (region !== "all") {
-  //    setSelectedItems([region]);
-  //  } else {
-  //    setSelectedItems([]);
-  //  }
-  //};
-
   return (
     <div className="grid gap-6 md:grid-cols-4">
       <div className="col-span-3">
@@ -421,7 +415,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-20 h-3 rounded-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500" />
-                    <span className="text-sm">Device Status (Green: All Online, Yellow: 1% Offline, Orange: 5% Offline, Red: 10%+ Offline)</span>
+                    <span className="text-sm">Device Status (Green: All Online, Yellow: 0.5% Offline, Orange: 1% Offline, Red: 2%+ Offline)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-gray-400 opacity-70" />
@@ -445,6 +439,14 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
                   </div>
                 </>
               )}
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="text-sm">Select Rectangle</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-sm">Deselect Rectangle</span>
+              </div>
             </div>
           </CardContent>
         </Card>
