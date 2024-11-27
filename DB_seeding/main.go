@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	numDevices      = 2000
-	numLogs         = 5000
-	numApplications = 4
-	seedFilePath    = "seed.sql"
-	maxWorkers      = 50
+	numDevices          = 2000
+	numLogs             = 5000
+	numApplications     = 4
+	seedFilePath        = "seed.sql"
+	maxWorkers          = 50
+	errorRatePercent    = 0.2 // 0.1% error rate for edge devices
+	appIssueRatePercent = 0.1 // 0.1% app issue rate
 )
 
 var municipalities []string
@@ -200,15 +202,34 @@ func seedEdgeDevice(db *sql.DB, index int) {
 }
 
 func weightedStatus() string {
-	r := rand.Intn(100)
+	// Use static percentages to calculate device states
+	onlineRate := 100 - errorRatePercent
+	offlineRate := errorRatePercent * 0.3 // Adjust offline proportion
+	errorRate := errorRatePercent * 0.7   // Adjust error proportion
+
+	r := rand.Float64() * 100
 	switch {
-	case r < 97:
+	case r < onlineRate:
 		return "online"
-	case r < 99:
+	case r < onlineRate+offlineRate:
 		return "offline"
+	case r < onlineRate+offlineRate+errorRate:
+		return "error"
 	default:
+		return "online" // Fallback (should never occur due to rates adding to 100)
+	}
+}
+
+func applicationStatusForDevice(deviceStatus string) string {
+	// Keep application errors within the appIssueRatePercent threshold
+	if deviceStatus == "offline" {
+		return "offline"
+	}
+	if rand.Float64()*100 < appIssueRatePercent {
 		return "error"
 	}
+	return "online"
+	//TODO: add warning
 }
 
 func randomPerformanceMetric(status string) float64 {
@@ -306,17 +327,6 @@ func seedLog(db *sql.DB) {
 func logStatus() string {
 	statuses := []string{"warning", "error", "app_issue"}
 	return statuses[rand.Intn(len(statuses))]
-}
-
-func applicationStatusForDevice(deviceStatus string) string {
-	if deviceStatus == "offline" {
-		return "offline"
-	}
-	if rand.Intn(100) < 1 {
-		return "error"
-	}
-	//TODO: add warning
-	return "online"
 }
 
 func randomConnectionType() string {

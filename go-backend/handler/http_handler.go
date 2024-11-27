@@ -123,3 +123,76 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
+
+// AppStoreHandler handles the /appstore endpoint to return available applications and their associated sensor information
+func AppStoreHandler(w http.ResponseWriter, r *http.Request) {
+	applications, err := service.GetAppStoreData()
+	if err != nil {
+		http.Error(w, "Error retrieving applications", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(applications)
+}
+
+// EligibleDevicesHandler handles the /eligible-devices endpoint to return eligible devices for an application
+func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Extract meber ID from JWT
+	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
+	if !ok {
+		http.Error(w, "Meber ID missing from context", http.StatusUnauthorized)
+		return
+	}
+
+	// Step 2: Parse the request body to get the application ID
+	var requestBody struct {
+		ApplicationID int64 `json:"application_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Step 3: Get eligible devices
+	eligibleDevices, err := service.GetEligibleDevices(meberID, requestBody.ApplicationID)
+	if err != nil {
+		http.Error(w, "Error retrieving eligible devices", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(eligibleDevices)
+}
+
+// AddApplicationsToDevicesHandler handles the /add-applications endpoint to add applications to devices
+func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Extract user ID from JWT
+	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
+	if !ok {
+		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
+		return
+	}
+
+	// Step 2: Parse the request body to get the device IDs and application ID
+	var requestBody struct {
+		AppID     int64   `json:"application_id"`
+		DeviceIDs []int64 `json:"device_ids"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&requestBody)
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Step 3: Add application instances to devices
+	err = service.AddApplicationsToDevices(meberID, requestBody.AppID, requestBody.DeviceIDs)
+	if err != nil {
+		http.Error(w, "Error adding applications to devices", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Applications added to devices successfully"))
+}

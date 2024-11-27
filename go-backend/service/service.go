@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	"main/repository"
 	"main/structs"
@@ -121,4 +122,64 @@ func GetAllMebers() ([]structs.Meber, error) {
 // GetMeberByID retrieves a meber from the repository layer by ID
 func GetMeberByID(meberID int64) (*structs.Meber, error) {
 	return repository.GetMeberByID(meberID)
+}
+
+func GetAppStoreData() ([]structs.ApplicationWithSensors, error) {
+	return repository.GetAppStoreData()
+}
+
+// GetEligibleDevices retrieves devices eligible for installing the given application
+func GetEligibleDevices(meberID int64, appID int64) ([]structs.EligibleDevice, error) {
+	// Step 1: Get devices accessible by the user
+	devices, err := repository.GetDevicesByMeber(meberID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 2: Check eligibility for each device
+	var eligibleDevices []structs.EligibleDevice
+	for _, device := range devices {
+		eligible, reason, err := repository.CheckDeviceEligibility(device.ID, appID)
+		if err != nil {
+			return nil, err
+		}
+
+		eligibleDevices = append(eligibleDevices, structs.EligibleDevice{
+			Device:   device,
+			Eligible: eligible,
+			Reason:   reason,
+		})
+	}
+
+	return eligibleDevices, nil
+}
+
+// AddApplicationsToDevices adds applications to the specified devices
+func AddApplicationsToDevices(userID int64, appID int64, deviceIDs []int64) error {
+	// Step 1: Verify that the user has access to the devices
+	devices, err := repository.GetDevicesByMeber(userID)
+	if err != nil {
+		return err
+	}
+
+	deviceAccessMap := make(map[int64]bool)
+	for _, device := range devices {
+		deviceAccessMap[device.ID] = true
+	}
+
+	for _, deviceID := range deviceIDs {
+		if !deviceAccessMap[deviceID] {
+			return fmt.Errorf("user does not have access to device %d", deviceID)
+		}
+	}
+
+	// Step 2: Add application instances to the devices
+	for _, deviceID := range deviceIDs {
+		err := repository.AddApplicationInstance(deviceID, appID)
+		if err != nil {
+			return fmt.Errorf("error adding application %d to device %d: %w", appID, deviceID, err)
+		}
+	}
+
+	return nil
 }
