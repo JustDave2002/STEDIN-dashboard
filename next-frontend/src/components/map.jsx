@@ -113,17 +113,46 @@ function MapContent({ geoLevel, onItemClick, selectedItems, onDragSelect, onDrag
 
         let icon = isSelected ? SelectedIcon : status.toLowerCase() === "online" ? OnlineIcon : OfflineIcon;
 
-        return L.marker([latitude, longitude], { icon })
-          .bindPopup(name)
-          .on('click', () => onItemClick(name, municipality, status));
+        // Only create a marker if it's selected or not in deselect mode
+        if (!isDeselectMode || isSelected) {
+          return L.marker([latitude, longitude], { icon, status })
+            .bindPopup(name)
+            .on('click', () => onItemClick(name, municipality, status));
+        }
+        return null;
+      }).filter(Boolean); // Remove null values
+
+      const markerClusterGroup = L.markerClusterGroup({
+        maxClusterRadius: 50,
+        iconCreateFunction: (cluster) => {
+          const childMarkers = cluster.getAllChildMarkers();
+          const hasIssue = childMarkers.some(marker => 
+            ['error', 'app_issue', 'offline'].includes(marker.options.status.toLowerCase())
+          );
+          
+          const className = hasIssue ? 'marker-cluster-red' : 'marker-cluster-green';
+          
+          return L.divIcon({
+            html: `<div><span>${childMarkers.length}</span></div>`,
+            className: `marker-cluster ${className}`,
+            iconSize: L.point(40, 40)
+          });
+        },
+        // Disable all animations for better performance
+        animate: false,
+        // Remove default cluster styles
+        removeOutsideVisibleBounds: true,
+        disableClusteringAtZoom: 19,
+        spiderfyOnMaxZoom: true,
+        chunkedLoading: true,
+        zoomToBoundsOnClick: true
       });
 
-      const markerClusterGroup = L.markerClusterGroup();
       markerClusterGroup.addLayers(markers);
       map.addLayer(markerClusterGroup);
       markerClusterGroupRef.current = markerClusterGroup;
     }
-  }, [geoLevel, mapData, selectedItems, map, onItemClick]);
+  }, [geoLevel, mapData, selectedItems, map, onItemClick, isDeselectMode]);
 
   const handleCreated = (e) => {
     const layer = e.layer;
