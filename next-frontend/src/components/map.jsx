@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
@@ -223,6 +225,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
   const [isDeselectMode, setIsDeselectMode] = useState(false);
   const [mapKey, setMapKey] = useState(0);
   const [aggregatedData, setAggregatedData] = useState({});
+  const router = useRouter();
 
   useEffect(() => {
     // Aggregate data for high-level view
@@ -356,6 +359,22 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
     );
   };
 
+  const handleOpenInDevices = () => {
+    localStorage.removeItem('selectedDevices');
+    localStorage.removeItem('selectedRegions');
+    if (geoLevel === 0) {
+      // High-level view: save selected regions
+      localStorage.setItem('selectedRegions', JSON.stringify(selectedItems));
+    } else {
+      // Low-level view: save selected devices
+      const selectedDevices = selectedItems.map(item => 
+        typeof item === 'string' ? item : item.name
+      );
+      localStorage.setItem('selectedDevices', JSON.stringify(selectedDevices));
+    }
+    router.push('/device');
+  };
+
   return (
     <div className="grid gap-6 md:grid-cols-4">
       <div className="col-span-3">
@@ -482,43 +501,52 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
           <CardContent>
             <div className="max-h-[500px] overflow-y-auto pr-2">
               {selectedItems.length > 0 ? (
-                selectedItems.map((item, index) => (
-                  <div key={index} className="space-y-2 mb-4 flex items-center justify-between">
-                    <div>
-                      {typeof item === 'string' ? (
-                        <>
-                          <p className="text-sm font-medium">{item}</p>
-                          {aggregatedData[item] && (
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <span className="text-muted-foreground">Devices:</span>
-                              <span>{aggregatedData[item].devices}</span>
-                              <span className="text-muted-foreground">Online:</span>
-                              <span>{aggregatedData[item].online}</span>
-                              <span className="text-muted-foreground">Offline:</span>
-                              <span>{aggregatedData[item].offline}</span>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">Municipality: {item.municipality}</p>
-                          <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
-                        </>
-                      )}
+                <>
+                  {selectedItems.map((item, index) => (
+                    <div key={index} className="space-y-2 mb-4 flex items-center justify-between">
+                      <div>
+                        {typeof item === 'string' ? (
+                          <>
+                            <p className="text-sm font-medium">{item}</p>
+                            {aggregatedData[item] && (
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <span className="text-muted-foreground">Devices:</span>
+                                <span>{aggregatedData[item].devices}</span>
+                                <span className="text-muted-foreground">Online:</span>
+                                <span>{aggregatedData[item].online}</span>
+                                <span className="text-muted-foreground">Offline:</span>
+                                <span>{aggregatedData[item].offline}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">{item.name}</p>
+                            <p className="text-sm text-muted-foreground">Municipality: {item.municipality}</p>
+                            <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => handleRemoveClick(item)}
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      className="text-red-500 hover:text-red-700"
-                      onClick={() => handleRemoveClick(item)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
+                  ))}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">No {geoLevel === 0 ? "region" : "edge computer"} selected</p>
               )}
             </div>
+            <Button 
+              className="w-full mt-4" 
+              onClick={handleOpenInDevices}
+              disabled={selectedItems.length === 0}
+            >
+              Open in Devices
+            </Button>
           </CardContent>
         </Card>
       </div>
