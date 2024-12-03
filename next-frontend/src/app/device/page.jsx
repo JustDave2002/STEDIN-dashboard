@@ -28,17 +28,20 @@ export default function DevicePage() {
     gemeente: [],
   });
 
+  // Debounce the search term update
   const updateDebouncedSearch = useCallback(
     debounce((term) => setDebouncedSearchTerm(term), 300),
     []
   );
 
+  // Handle search term change with debounce
   const handleSearchChange = (e) => {
     const term = e.target.value;
     setSearchTerm(term);
     updateDebouncedSearch(term);
   };
 
+  // Fetch data from the API when the component mounts
   useEffect(() => {
     async function fetchDevices() {
       try {
@@ -51,15 +54,15 @@ export default function DevicePage() {
         if (selectedDevicesJson) {
           const selectedDevices = JSON.parse(selectedDevicesJson);
           const filteredData = data.filter((device) => selectedDevices.includes(device.name));
-          setFilteredDevices(filteredData);
-          setIsViewingFilteredResults(true);
+          setFilteredDevices(filteredData); // Initially, filtered data selected from map is shown
+          setIsViewingFilteredResults(true); // Boolean for if the devices is selected from the map
         } else if (selectedRegionsJson) {
           const selectedRegions = JSON.parse(selectedRegionsJson);
           setSelectedFilters(prev => ({...prev, gemeente: selectedRegions}));
-          setFilteredDevices(data);
+          setFilteredDevices(data); // Initially, all devices are shown
           setIsViewingFilteredResults(false);
         } else {
-          setFilteredDevices(data);
+          setFilteredDevices(data); // Initially, all devices are shown
           setIsViewingFilteredResults(false);
         }
 
@@ -114,6 +117,7 @@ export default function DevicePage() {
     return applyFilters(devicesToFilter, selectedFilters, debouncedSearchTerm);
   }, [selectedFilters, debouncedSearchTerm, isViewingFilteredResults, allDevices, filteredDevices, applyFilters]);
 
+  // Function to reset all filters and search term
   const resetFilters = () => {
     setSelectedFilters({
       status: [],
@@ -121,8 +125,9 @@ export default function DevicePage() {
       gemeente: [],
     });
     setSearchTerm("");
-    setDebouncedSearchTerm("");
+    setDebouncedSearchTerm(""); // Reset debounced term
     
+    // If it has devices selected from map, reset to the filtered devices as base.
     if (isViewingFilteredResults) {
       const selectedDevicesJson = localStorage.getItem('selectedDevices');
       if (selectedDevicesJson) {
@@ -135,6 +140,7 @@ export default function DevicePage() {
     }
   };
 
+  // clears the filter from selected devices from the map.
   const clearFilteredResults = () => {
     localStorage.removeItem('selectedDevices');
     localStorage.removeItem('selectedRegions');
@@ -147,6 +153,7 @@ export default function DevicePage() {
     });
   };
 
+  {/* Search Input */}
   const handleFilterChange = (filterType, value, checked) => {
     setSelectedFilters((prev) => {
       const newFilters = {
@@ -162,6 +169,7 @@ export default function DevicePage() {
   return (
     <div>
       <div className="flex items-center justify-between p-4 bg-background border-b">
+        {/* Search Input */}
         <div className="flex-1 mr-4">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -175,6 +183,7 @@ export default function DevicePage() {
           </div>
         </div>
 
+        {/* Clear Map Filter */}
         <div className="flex items-center space-x-4">
           {isViewingFilteredResults && (
             <Button variant="outline" onClick={clearFilteredResults}>
@@ -182,8 +191,11 @@ export default function DevicePage() {
               Clear Map Filter
             </Button>
           )}
+
+          {/* Filters */}
           <span className="text-sm font-medium">Filter:</span>
 
+          {/* Status Filter */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[120px] justify-between">
@@ -213,6 +225,7 @@ export default function DevicePage() {
             </PopoverContent>
           </Popover>
 
+          {/* Applicatie Filter */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[120px] justify-between">
@@ -242,6 +255,7 @@ export default function DevicePage() {
             </PopoverContent>
           </Popover>
 
+          {/* Gemeente Filter */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[120px] justify-between">
@@ -271,11 +285,13 @@ export default function DevicePage() {
             </PopoverContent>
           </Popover>
 
+          {/* Reset Filters */}
           <Button variant="link" onClick={resetFilters}>
             Reset Filters
           </Button>
         </div>
 
+        {/* Add Device Button */}
         <Link href="/devices/new">
           <Button className="ml-4">
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -284,6 +300,7 @@ export default function DevicePage() {
         </Link>
       </div>
 
+      {/* Device Table */}
       <DeviceTable devices={displayedDevices} />
     </div>
   );

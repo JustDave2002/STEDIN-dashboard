@@ -42,6 +42,12 @@ const getRegionColor = (regionData) => {
 
   const offlineRatio = offline / total;
 
+  // Create a more sensitive gradient
+  // 0% offline: pure green (0, 255, 0)
+  // 1% offline: yellow-green (127, 255, 0)
+  // 5% offline: orange (255, 165, 0)
+  // 10%+ offline: red (255, 0, 0)
+
   let r, g, b;
 
   if (offlineRatio === 0) {
