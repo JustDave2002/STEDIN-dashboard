@@ -6,8 +6,9 @@ import { EditControl } from "react-leaflet-draw";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
@@ -16,7 +17,6 @@ import "leaflet-draw/dist/leaflet.draw.css";
 
 // Import high-level GeoJSON data
 import { stedinGeojson } from "@/data/StedinGeojson";
-//import { getMapData } from "@/app/api/mapData/route";
 
 // Create custom icons for markers
 const createCustomIcon = (imageName) => L.icon({
@@ -52,17 +52,17 @@ const getRegionColor = (regionData) => {
 
   if (offlineRatio === 0) {
     [r, g, b] = [0, 255, 0];
-  } else if (offlineRatio <= 0.01) {
+  } else if (offlineRatio <= 0.005) {
     const t = offlineRatio / 0.01;
     r = Math.round(127 * t);
     g = 255;
     b = 0;
-  } else if (offlineRatio <= 0.05) {
+  } else if (offlineRatio <= 0.01) {
     const t = (offlineRatio - 0.01) / 0.04;
     r = Math.round(127 + 128 * t);
     g = Math.round(255 - 90 * t);
     b = 0;
-  } else if (offlineRatio <= 0.1) {
+  } else if (offlineRatio <= 0.02) {
     const t = (offlineRatio - 0.05) / 0.05;
     r = 255;
     g = Math.round(165 - 165 * t);
@@ -231,6 +231,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
   const [isDeselectMode, setIsDeselectMode] = useState(false);
   const [mapKey, setMapKey] = useState(0);
   const [aggregatedData, setAggregatedData] = useState({});
+  const router = useRouter();
 
   useEffect(() => {
     // Aggregate data for high-level view
@@ -347,6 +348,8 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
       case "online":
         return "text-green-500";
       case "offline":
+      case "error":
+      case "app_issue":
         return "text-red-500";
       default:
         return "text-gray-500";
@@ -362,14 +365,21 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
     );
   };
 
-  //const handleRegionChange = (region) => {
-  //  setSelectedRegion(region);
-  //  if (region !== "all") {
-  //    setSelectedItems([region]);
-  //  } else {
-  //    setSelectedItems([]);
-  //  }
-  //};
+  const handleOpenInDevices = () => {
+    localStorage.removeItem('selectedDevices');
+    localStorage.removeItem('selectedRegions');
+    if (geoLevel === 0) {
+      // High-level view: save selected regions
+      localStorage.setItem('selectedRegions', JSON.stringify(selectedItems));
+    } else {
+      // Low-level view: save selected devices
+      const selectedDevices = selectedItems.map(item => 
+        typeof item === 'string' ? item : item.name
+      );
+      localStorage.setItem('selectedDevices', JSON.stringify(selectedDevices));
+    }
+    router.push('/device');
+  };
 
   return (
     <div className="grid gap-6 md:grid-cols-4">
@@ -450,7 +460,7 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-20 h-3 rounded-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500" />
-                    <span className="text-sm">Device Status (Green: All Online, Yellow: 1% Offline, Orange: 5% Offline, Red: 10%+ Offline)</span>
+                    <span className="text-sm">Device Status (Green: All Online, Yellow: 0.5% Offline, Orange: 1% Offline, Red: 2%+ Offline)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-gray-400 opacity-70" />
@@ -470,10 +480,19 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-sm">Offline Edge Computer</span>
+                    <span className="text-sm">Offline/Error/App Issue Edge Computer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">5</div>
+                    <span className="text-sm">Cluster with all Online Edge Computers</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">5</div>
+                    <span className="text-sm">Cluster with at least one Offline/Error/App Issue Edge Computer</span>
                   </div>
                 </>
               )}
+
             </div>
           </CardContent>
         </Card>
@@ -488,43 +507,52 @@ export default function InteractiveMap({ geoLevel = 0, filters, mapData }) {
           <CardContent>
             <div className="max-h-[500px] overflow-y-auto pr-2">
               {selectedItems.length > 0 ? (
-                selectedItems.map((item, index) => (
-                  <div key={index} className="space-y-2 mb-4 flex items-center justify-between">
-                    <div>
-                      {typeof item === 'string' ? (
-                        <>
-                          <p className="text-sm font-medium">{item}</p>
-                          {aggregatedData[item] && (
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <span className="text-muted-foreground">Devices:</span>
-                              <span>{aggregatedData[item].devices}</span>
-                              <span className="text-muted-foreground">Online:</span>
-                              <span>{aggregatedData[item].online}</span>
-                              <span className="text-muted-foreground">Offline:</span>
-                              <span>{aggregatedData[item].offline}</span>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium">{item.name}</p>
-                          <p className="text-sm text-muted-foreground">Municipality: {item.municipality}</p>
-                          <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
-                        </>
-                      )}
+                <>
+                  {selectedItems.map((item, index) => (
+                    <div key={index} className="space-y-2 mb-4 flex items-center justify-between">
+                      <div>
+                        {typeof item === 'string' ? (
+                          <>
+                            <p className="text-sm font-medium">{item}</p>
+                            {aggregatedData[item] && (
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <span className="text-muted-foreground">Devices:</span>
+                                <span>{aggregatedData[item].devices}</span>
+                                <span className="text-muted-foreground">Online:</span>
+                                <span>{aggregatedData[item].online}</span>
+                                <span className="text-muted-foreground">Offline:</span>
+                                <span>{aggregatedData[item].offline}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">{item.name}</p>
+                            <p className="text-sm text-muted-foreground">Municipality: {item.municipality}</p>
+                            <p className={`text-sm ${getStatusColor(item.status)}`}>Status: {item.status}</p>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => handleRemoveClick(item)}
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      className="text-red-500 hover:text-red-700"
-                      onClick={() => handleRemoveClick(item)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
+                  ))}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">No {geoLevel === 0 ? "region" : "edge computer"} selected</p>
               )}
             </div>
+            <Button 
+              className="w-full mt-4" 
+              onClick={handleOpenInDevices}
+              disabled={selectedItems.length === 0}
+            >
+              Open in Devices
+            </Button>
           </CardContent>
         </Card>
       </div>
