@@ -5,6 +5,7 @@ import (
 	"log"
 	"main/repository"
 	"main/structs"
+	"time"
 )
 
 func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
@@ -182,4 +183,15 @@ func AddApplicationsToDevices(userID int64, appID int64, deviceIDs []int64) erro
 	}
 
 	return nil
+}
+
+// GetLogs retrieves logs based on device ID and date range
+func GetLogs(deviceID, appInstanceID int64, startDate, endDate *time.Time) ([]structs.Log, error) {
+	// Delegate the database query to the repository layer
+	logs, err := repository.FetchLogs(deviceID, appInstanceID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching logs: %w", err)
+	}
+
+	return logs, nil
 }

@@ -765,3 +765,61 @@ func AddApplicationInstance(deviceID int64, appID int64) error {
 	}
 	return nil
 }
+
+// FetchLogs retrieves logs based on the given parameters
+func FetchLogs(deviceID, appInstanceID int64, startDate, endDate *time.Time) ([]structs.Log, error) {
+	// Base query
+	query := "SELECT id, device_id, app_instance_id, description, warning_level, timestamp FROM logs WHERE 1=1"
+
+	// Add filters based on inputs
+	args := []interface{}{}
+	if deviceID != 0 {
+		query += " AND device_id = ?"
+		args = append(args, deviceID)
+	}
+	if appInstanceID != 0 {
+		query += " AND app_instance_id = ?"
+		args = append(args, appInstanceID)
+	}
+	if startDate != nil {
+		query += " AND timestamp >= ?"
+		args = append(args, *startDate)
+	}
+	if endDate != nil {
+		query += " AND timestamp <= ?"
+		args = append(args, *endDate)
+	}
+
+	// Execute the query
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching logs: %w", err)
+	}
+	defer rows.Close()
+
+	// Parse the rows into the logs slice
+	var logs []structs.Log
+	for rows.Next() {
+		var log structs.Log
+		var timestampRaw []byte // Handle timestamp column as []byte
+		err := rows.Scan(&log.ID, &log.DeviceID, &log.AppInstanceID, &log.Description, &log.WarningLevel, &timestampRaw)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning log row: %w", err)
+		}
+
+		// Convert timestampRaw to time.Time
+		log.Timestamp, err = time.Parse("2006-01-02 15:04:05", string(timestampRaw))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing timestamp: %w", err)
+		}
+
+		logs = append(logs, log)
+	}
+
+	// Check for row iteration errors
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating log rows: %w", err)
+	}
+
+	return logs, nil
+}

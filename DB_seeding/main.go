@@ -196,10 +196,10 @@ func seedEdgeDevice(db *sql.DB, index int) {
 	seedDeviceSensorsAndApplications(db, deviceID, status)
 
 	// Generate a log if the status is either "offline", "error", or "app_issue"
-	if status != "online" {
+	if status == "offline" || status == "error" {
 		log.Printf("Generate device log for status: %s", status)
 		// Create a log for this device since it's in a non-'online' status (offline, error, or app_issue)
-		seedLogForDevice(db, deviceID, status)
+		seedLogForDevice(db, deviceID, status, lastContact) // Pass lastContact as timestamp
 	}
 }
 
@@ -277,7 +277,7 @@ func seedDeviceSensorsAndApplications(db *sql.DB, deviceID int64, deviceStatus s
 
 		// Generate log if the app status is "error" or "app_issue"
 		if appStatus == "error" || appStatus == "app_issue" || appStatus == "offline" {
-			seedLogForApplication(db, appInstanceID, appStatus) // Correctly use the appInstanceID
+			seedLogForApplication(db, deviceID, appInstanceID, appStatus) // Correctly use the appInstanceID
 		}
 
 		// If the device has a status issue, update the edge device status to 'app_issue' and create logs
@@ -319,14 +319,15 @@ func seedApplicationInstance(db *sql.DB, deviceID int64, appName string, status 
 	return appInstanceID
 }
 
-func seedLogForDevice(db *sql.DB, deviceID int64, status string) {
+func seedLogForDevice(db *sql.DB, deviceID int64, status string, lastContact time.Time) {
 	// Only generate logs for non-"online" statuses
 	if status == "online" {
 		return
 	}
 
 	logMessage := fmt.Sprintf("Device %d is in %s status", deviceID, status)
-	logTimestamp := randomTimestamp() // A function to generate a random timestamp
+	// Ensure the log timestamp is after the last_contact time
+	logTimestamp := lastContact.Add(time.Minute) // Add a minute to ensure it's after last_contact
 
 	// Insert a log for the device into the logs table
 	query := `INSERT INTO logs (device_id, description, warning_level, timestamp) 
@@ -337,21 +338,21 @@ func seedLogForDevice(db *sql.DB, deviceID int64, status string) {
 	}
 }
 
-func seedLogForApplication(db *sql.DB, appInstanceID int64, status string) {
+func seedLogForApplication(db *sql.DB, deviceID int64, appInstanceID int64, status string) {
 	// Only generate logs for non-"online" statuses
 	if status == "online" {
 		return
 	}
 
-	logMessage := fmt.Sprintf("Application instance %d has an issue with status %s", appInstanceID, status)
+	logMessage := fmt.Sprintf("Application instance %d on device %d has an issue with status %s", appInstanceID, deviceID, status)
 	logTimestamp := randomTimestamp() // A function to generate a random timestamp
 
-	// Insert a log for the application into the logs table
-	query := `INSERT INTO logs (app_instance_id, description, warning_level, timestamp) 
-              VALUES (?, ?, ?, ?)`
-	_, err := db.Exec(query, appInstanceID, logMessage, status, logTimestamp)
+	// Insert a log for the application into the logs table, including the device_id
+	query := `INSERT INTO logs (device_id, app_instance_id, description, warning_level, timestamp) 
+              VALUES (?, ?, ?, ?, ?)`
+	_, err := db.Exec(query, deviceID, appInstanceID, logMessage, status, logTimestamp)
 	if err != nil {
-		log.Printf("Error inserting log for application %d: %v\n", appInstanceID, err)
+		log.Printf("Error inserting log for application %d on device %d: %v\n", appInstanceID, deviceID, err)
 	}
 }
 

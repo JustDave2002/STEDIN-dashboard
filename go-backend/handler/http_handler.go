@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"main/middleware"
 	"net/http"
@@ -195,4 +196,67 @@ func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Applications added to devices successfully"))
+}
+
+// LogsHandler processes the request to fetch logs
+func LogsHandler(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Extract query parameters (e.g., device ID, appInstanceID, date range, etc.)
+	queryParams := r.URL.Query()
+	deviceIDStr := queryParams.Get("device_id")
+	appInstanceIDStr := queryParams.Get("app_instance_id") // Extract appInstanceID
+	startDateStr := queryParams.Get("start_date")
+	endDateStr := queryParams.Get("end_date")
+
+	var deviceID, appInstanceID int64 // Declare deviceID and appInstanceID
+	var err error
+
+	// Validate and parse the device ID if provided
+	if deviceIDStr != "" {
+		deviceID, err = strconv.ParseInt(deviceIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid device ID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate and parse the appInstanceID if provided
+	if appInstanceIDStr != "" {
+		appInstanceID, err = strconv.ParseInt(appInstanceIDStr, 10, 64) // Parse appInstanceID
+		if err != nil {
+			http.Error(w, "Invalid appInstanceID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate and parse the start date and end date if provided
+	var startDate, endDate *time.Time
+	if startDateStr != "" {
+		startDateParsed, err := time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			http.Error(w, "Invalid start date format", http.StatusBadRequest)
+			return
+		}
+		startDate = &startDateParsed
+	}
+
+	if endDateStr != "" {
+		endDateParsed, err := time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			http.Error(w, "Invalid end date format", http.StatusBadRequest)
+			return
+		}
+		endDate = &endDateParsed
+	}
+
+	// Step 2: Call the service to get the logs based on query parameters
+	logs, err := service.GetLogs(deviceID, appInstanceID, startDate, endDate) // Use appInstanceID here
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving logs: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Step 3: Respond with the logs in JSON format
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(logs)
 }
