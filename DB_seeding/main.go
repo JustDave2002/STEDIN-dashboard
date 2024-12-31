@@ -18,7 +18,6 @@ import (
 
 const (
 	numDevices          = 2000
-	numLogs             = 5000
 	numApplications     = 4
 	seedFilePath        = "seed.sql"
 	maxWorkers          = 50
@@ -73,14 +72,12 @@ func main() {
 
 	concurrentSeeder(db, 0, numDevices)
 	log.Println("Finished seeding edge devices")
-
-	concurrentSeeder(db, 1, numLogs)
-	log.Println("Finished seeding logs")
 }
+
 func concurrentSeeder(db *sql.DB, function int, iterations int) {
 	var wg sync.WaitGroup // WaitGroup to manage Goroutines
 
-	// Create a buffered channel to control concurrency (5 workers)
+	// Create a buffered channel to control concurrency (maxWorkers)
 	workerChannel := make(chan struct{}, maxWorkers)
 
 	for i := 1; i <= iterations; i++ {
@@ -94,17 +91,14 @@ func concurrentSeeder(db *sql.DB, function int, iterations int) {
 			workerChannel <- struct{}{}
 
 			// Print sending request
-			//fmt.Printf("Worker doing things")
+			// fmt.Printf("Worker doing things")
 
 			if function == 0 {
 				seedEdgeDevice(db, i)
 				fmt.Println("Finished seeding device ", i)
-			} else if function == 1 {
-				seedLog(db)
-				fmt.Println("Finished seeding log ", i)
 			}
 
-			<-workerChannel // Release the worker (decrement)
+			<-workerChannel // Release the worker
 		}(i)
 	}
 
@@ -173,7 +167,7 @@ func executeSQLFile(db *sql.DB) error {
 
 func seedEdgeDevice(db *sql.DB, index int) {
 	name := "MSR" + "_" + fmt.Sprint(index)
-	status := weightedStatus()
+	status := weightedStatus() // This could return 'offline', 'error', 'app_issue', or 'online'
 	connectionType := randomConnectionType()
 	municipality := municipalities[rand.Intn(len(municipalities))]
 	coordinates := randomCoordinatesWithinMunicipality(municipality)
@@ -181,24 +175,32 @@ func seedEdgeDevice(db *sql.DB, index int) {
 	performanceMetric := randomPerformanceMetric(status)
 	lastContact := randomTimestamp()
 
-	query := `INSERT INTO edge_devices ( name, status, last_contact, connection_type, coordinates, ip_address, performance_metric)
-	VALUES ( ?, ?, ?, ?, POINT(?, ?), ?, ?)`
-
+	// Insert device into the database
+	query := `INSERT INTO edge_devices (name, status, last_contact, connection_type, coordinates, ip_address, performance_metric)
+              VALUES (?, ?, ?, ?, POINT(?, ?), ?, ?)`
 	res, err := db.Exec(query, name, status, lastContact, connectionType, coordinates.lon, coordinates.lat, ipAddress, performanceMetric)
 	if err != nil {
 		log.Printf("Error inserting edge device %d: %v\n", index, err)
 		return
 	}
 
+	// Get the device ID
 	deviceID, err := res.LastInsertId()
 	if err != nil {
 		log.Printf("Error fetching last insert id for edge device %d: %v\n", index, err)
 		return
 	}
 
+	// Seed tags and sensors for the device
 	seedDeviceTag(db, deviceID, municipality)
-
 	seedDeviceSensorsAndApplications(db, deviceID, status)
+
+	// Generate a log if the status is either "offline", "error", or "app_issue"
+	if status != "online" {
+		log.Printf("Generate device log for status: %s", status)
+		// Create a log for this device since it's in a non-'online' status (offline, error, or app_issue)
+		seedLogForDevice(db, deviceID, status)
+	}
 }
 
 func weightedStatus() string {
@@ -270,8 +272,15 @@ func seedDeviceSensorsAndApplications(db *sql.DB, deviceID int64, deviceStatus s
 		}
 
 		appStatus := applicationStatusForDevice(deviceStatus)
-		seedApplicationInstance(db, deviceID, appName, appStatus, fmt.Sprintf("/path/to/%s", appName))
+		// Seed the application instance and capture the appInstanceID
+		appInstanceID := seedApplicationInstance(db, deviceID, appName, appStatus, fmt.Sprintf("/path/to/%s", appName))
 
+		// Generate log if the app status is "error" or "app_issue"
+		if appStatus == "error" || appStatus == "app_issue" || appStatus == "offline" {
+			seedLogForApplication(db, appInstanceID, appStatus) // Correctly use the appInstanceID
+		}
+
+		// If the device has a status issue, update the edge device status to 'app_issue' and create logs
 		if appStatus == "error" {
 			_, err := db.Exec(`UPDATE edge_devices SET status = 'app_issue' WHERE id = ?`, deviceID)
 			if err != nil {
@@ -296,37 +305,54 @@ func seedDeviceSensor(db *sql.DB, deviceID int64, sensorName string) {
 	}
 }
 
-func seedApplicationInstance(db *sql.DB, deviceID int64, appName string, status string, path string) {
-	query := `INSERT INTO application_instances (app_id, device_id, status, path) SELECT id, ?, ?, ? FROM applications WHERE name = ? LIMIT 1`
+func seedApplicationInstance(db *sql.DB, deviceID int64, appName string, status string, path string) int64 {
+	query := `INSERT INTO application_instances (app_id, device_id, status, path) 
+              SELECT id, ?, ?, ? FROM applications WHERE name = ? LIMIT 1`
 
-	_, err := db.Exec(query, deviceID, status, path, appName)
+	result, err := db.Exec(query, deviceID, status, path, appName)
 	if err != nil {
 		log.Printf("Error inserting application instance %s for device %d: %v\n", appName, deviceID, err)
 	}
+
+	// Return the application instance ID (last inserted ID)
+	appInstanceID, _ := result.LastInsertId()
+	return appInstanceID
 }
 
-func seedLog(db *sql.DB) {
-	description := faker.Sentence()
-	warningLevel := logStatus()
-	timestamp := randomTimestamp()
-
-	// Randomly decide if log relates to app instance or device
-	var appInstanceID sql.NullInt64
-	if rand.Intn(100) < 50 { // 50% chance it’s an application log
-		appInstanceID.Int64 = int64(rand.Intn(numApplications) + 1)
-		appInstanceID.Valid = true
+func seedLogForDevice(db *sql.DB, deviceID int64, status string) {
+	// Only generate logs for non-"online" statuses
+	if status == "online" {
+		return
 	}
 
-	query := `INSERT INTO logs (device_id, app_instance_id, description, warning_level, timestamp) VALUES (?, ?, ?, ?, ?)`
-	_, err := db.Exec(query, rand.Intn(numDevices)+1, appInstanceID, description, warningLevel, timestamp)
+	logMessage := fmt.Sprintf("Device %d is in %s status", deviceID, status)
+	logTimestamp := randomTimestamp() // A function to generate a random timestamp
+
+	// Insert a log for the device into the logs table
+	query := `INSERT INTO logs (device_id, description, warning_level, timestamp) 
+              VALUES (?, ?, ?, ?)`
+	_, err := db.Exec(query, deviceID, logMessage, status, logTimestamp)
 	if err != nil {
-		log.Printf("Error inserting log: %v\n", err)
+		log.Printf("Error inserting log for device %d: %v\n", deviceID, err)
 	}
 }
 
-func logStatus() string {
-	statuses := []string{"warning", "error", "app_issue"}
-	return statuses[rand.Intn(len(statuses))]
+func seedLogForApplication(db *sql.DB, appInstanceID int64, status string) {
+	// Only generate logs for non-"online" statuses
+	if status == "online" {
+		return
+	}
+
+	logMessage := fmt.Sprintf("Application instance %d has an issue with status %s", appInstanceID, status)
+	logTimestamp := randomTimestamp() // A function to generate a random timestamp
+
+	// Insert a log for the application into the logs table
+	query := `INSERT INTO logs (app_instance_id, description, warning_level, timestamp) 
+              VALUES (?, ?, ?, ?)`
+	_, err := db.Exec(query, appInstanceID, logMessage, status, logTimestamp)
+	if err != nil {
+		log.Printf("Error inserting log for application %d: %v\n", appInstanceID, err)
+	}
 }
 
 func randomConnectionType() string {
