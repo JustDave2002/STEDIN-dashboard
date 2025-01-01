@@ -325,14 +325,24 @@ func seedLogForDevice(db *sql.DB, deviceID int64, status string, lastContact tim
 		return
 	}
 
-	logMessage := fmt.Sprintf("Device %d is in %s status", deviceID, status)
+	// Retrieve the device name from the database
+	var deviceName string
+	err := db.QueryRow(`SELECT name FROM edge_devices WHERE id = ?`, deviceID).Scan(&deviceName)
+	if err != nil {
+		log.Printf("Error fetching device name for device ID %d: %v\n", deviceID, err)
+		return
+	}
+
+	// Generate the log message using the device name
+	logMessage := fmt.Sprintf("Device '%s' is in %s status", deviceName, status)
+
 	// Ensure the log timestamp is after the last_contact time
 	logTimestamp := lastContact.Add(time.Minute) // Add a minute to ensure it's after last_contact
 
 	// Insert a log for the device into the logs table
 	query := `INSERT INTO logs (device_id, description, warning_level, timestamp) 
               VALUES (?, ?, ?, ?)`
-	_, err := db.Exec(query, deviceID, logMessage, status, logTimestamp)
+	_, err = db.Exec(query, deviceID, logMessage, status, logTimestamp)
 	if err != nil {
 		log.Printf("Error inserting log for device %d: %v\n", deviceID, err)
 	}
@@ -344,13 +354,30 @@ func seedLogForApplication(db *sql.DB, deviceID int64, appInstanceID int64, stat
 		return
 	}
 
-	logMessage := fmt.Sprintf("Application instance %d on device %d has an issue with status %s", appInstanceID, deviceID, status)
+	// Retrieve the device name from the database
+	var deviceName string
+	err := db.QueryRow(`SELECT name FROM edge_devices WHERE id = ?`, deviceID).Scan(&deviceName)
+	if err != nil {
+		log.Printf("Error fetching device name for device ID %d: %v\n", deviceID, err)
+		return
+	}
+
+	// Retrieve the application name for the instance
+	var appName string
+	err = db.QueryRow(`SELECT name FROM applications WHERE id = (SELECT app_id FROM application_instances WHERE id = ?)`, appInstanceID).Scan(&appName)
+	if err != nil {
+		log.Printf("Error fetching application name for application instance ID %d: %v\n", appInstanceID, err)
+		return
+	}
+
+	// Generate the log message using the app name, device name, and status
+	logMessage := fmt.Sprintf("%s application instance %d on device '%s' has an issue with status %s", appName, appInstanceID, deviceName, status)
 	logTimestamp := randomTimestamp() // A function to generate a random timestamp
 
 	// Insert a log for the application into the logs table, including the device_id
 	query := `INSERT INTO logs (device_id, app_instance_id, description, warning_level, timestamp) 
               VALUES (?, ?, ?, ?, ?)`
-	_, err := db.Exec(query, deviceID, appInstanceID, logMessage, status, logTimestamp)
+	_, err = db.Exec(query, deviceID, appInstanceID, logMessage, status, logTimestamp)
 	if err != nil {
 		log.Printf("Error inserting log for application %d on device %d: %v\n", appInstanceID, deviceID, err)
 	}
