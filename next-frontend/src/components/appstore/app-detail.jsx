@@ -1,6 +1,15 @@
+'use client';
 import { Button } from "@/components/ui/button"
 
-export default function AppDetail({ app, onInstall }) {
+export default function AppDetail({ app }) {
+    const handleViewEligibleDevices = () => {
+        // Store parameters in localStorage
+        localStorage.setItem("installApp", "true");
+        localStorage.setItem("appId", app.id);
+
+        // Redirect to the DevicePage
+        window.location.href = "/device";
+    };
     return (
         <div className="space-y-6 p-4 border rounded-lg">
             <div>
@@ -26,8 +35,7 @@ export default function AppDetail({ app, onInstall }) {
                     <p>No sensors required for this application.</p>
                 )}
             </div>
-            <Button onClick={onInstall} className="w-full">Install Application</Button>
+            <Button onClick={handleViewEligibleDevices}>View Eligible Devices</Button>
         </div>
     )
 }
-
