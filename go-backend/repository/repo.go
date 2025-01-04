@@ -601,18 +601,18 @@ func GetDevicesByMeber(meberID int64) ([]structs.EdgeDevice, error) {
 }
 
 // CheckDeviceEligibility checks if a device is eligible to install the given application
-func CheckDeviceEligibility(deviceID int64, appID int64) (bool, *string, error) {
+func CheckDeviceEligibility(deviceID int64, appID int64) (bool, bool, *string, error) {
 	// Step 1: Check if the device already has the application instance
 	query := "SELECT COUNT(*) FROM application_instances WHERE device_id = ? AND app_id = ?"
 	var count int
 	err := DB.QueryRow(query, deviceID, appID).Scan(&count)
 	if err != nil {
 		log.Printf("Error checking application instance for device %d and app %d: %v", deviceID, appID, err)
-		return false, nil, err
+		return false, false, nil, err
 	}
 	if count > 0 {
 		reason := "Application already installed"
-		return false, &reason, nil
+		return false, true, &reason, nil
 	}
 
 	// Step 2: Check if the application has required sensors
@@ -621,12 +621,12 @@ func CheckDeviceEligibility(deviceID int64, appID int64) (bool, *string, error) 
 	err = DB.QueryRow(sensorCountQuery, appID).Scan(&sensorCount)
 	if err != nil {
 		log.Printf("Error checking sensor requirements for app %d: %v", appID, err)
-		return false, nil, err
+		return false, false, nil, err
 	}
 
 	// If the application has no required sensors, it is eligible by default
 	if sensorCount == 0 {
-		return true, nil, nil
+		return true, false, nil, nil
 	}
 
 	// Step 3: Check if the device has the required sensors
@@ -639,14 +639,14 @@ func CheckDeviceEligibility(deviceID int64, appID int64) (bool, *string, error) 
 	err = DB.QueryRow(sensorCheckQuery, appID, deviceID).Scan(&count)
 	if err != nil {
 		log.Printf("Error checking sensors for device %d and app %d: %v", deviceID, appID, err)
-		return false, nil, err
+		return false, false, nil, err
 	}
 	if count < sensorCount {
 		reason := "Required sensors not present"
-		return false, &reason, nil
+		return false, false, &reason, nil
 	}
 
-	return true, nil, nil
+	return true, false, nil, nil
 }
 
 //

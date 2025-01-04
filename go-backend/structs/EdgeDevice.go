@@ -34,9 +34,10 @@ type ApplicationWithSensors struct {
 
 // EligibleDevice represents a device and its eligibility status for installing an application
 type EligibleDevice struct {
-	Device   EdgeDevice `json:"device"`
-	Eligible bool       `json:"eligible"`
-	Reason   *string    `json:"reason,omitempty"`
+	Device    string  `json:"name"`
+	Eligible  bool    `json:"isEligible"`
+	Installed bool    `json:"isInstalled"`
+	Reason    *string `json:"reason"`
 }
 
 // Sensor represents a sensor entity

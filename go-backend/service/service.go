@@ -140,15 +140,16 @@ func GetEligibleDevices(meberID int64, appID int64) ([]structs.EligibleDevice, e
 	// Step 2: Check eligibility for each device
 	var eligibleDevices []structs.EligibleDevice
 	for _, device := range devices {
-		eligible, reason, err := repository.CheckDeviceEligibility(device.ID, appID)
+		eligible, installed, reason, err := repository.CheckDeviceEligibility(device.ID, appID)
 		if err != nil {
 			return nil, err
 		}
 
 		eligibleDevices = append(eligibleDevices, structs.EligibleDevice{
-			Device:   device,
-			Eligible: eligible,
-			Reason:   reason,
+			Device:    device.Name,
+			Eligible:  eligible,
+			Installed: installed,
+			Reason:    reason,
 		})
 	}
 

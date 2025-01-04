@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"main/middleware"
+	"main/structs"
 	"net/http"
 	"strconv"
 	"time"
@@ -163,8 +164,19 @@ func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Step 4: Wrap the response
+	response := struct {
+		Devices []structs.EligibleDevice `json:"devices"`
+	}{
+		Devices: eligibleDevices,
+	}
+
+	// Step 5: Encode the wrapped response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(eligibleDevices)
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
 }
 
 // AddApplicationsToDevicesHandler handles the /add-applications endpoint to add applications to devices
