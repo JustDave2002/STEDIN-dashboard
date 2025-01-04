@@ -122,10 +122,10 @@
         state: started
       ignore_errors: true
 
-    - name: Ensure Kubernetes ports are open in iptables
+    - name: Ensure Kubernetes ports are open in iptables for wg0 interface
       shell: |
         {% for port in kube_ports %}
-        iptables -A INPUT -p tcp --dport {{ port }} -j ACCEPT
+        iptables -A INPUT -i wg0 -p tcp --dport {{ port }} -j ACCEPT
         {% endfor %}
       args:
         executable: /bin/bash
@@ -184,7 +184,7 @@
 
     - name: Assign unique WireGuard IP to worker
       set_fact:
-        wg_ip: "10.0.0.{{ inventory_hostname | regex_replace('.*-(\\d+)', '\\1') | int + 1 }}"
+        wg_ip: "10.0.0.{{ inventory_hostname | regex_replace('.*-(\\d+)', '\\1') | int + 2 }}"
 
     - name: Create WireGuard configuration file for worker
       copy:

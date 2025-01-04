@@ -18,4 +18,4 @@ __pycache__/
 *.log
 
 .env
-.ini
+*.ini

@@ -1,0 +1,220 @@
+---
+- name: Global Setup (All Hosts)
+  hosts: all
+  become: true
+  tasks:
+    - name: Disable swap until reboot
+      command: swapoff -a
+
+    - name: Install base packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        update_cache: yes
+        state: present
+
+    - name: Ensure the directory /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Ensure br_netfilter module is loaded
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: Enable IPv4 forwarding and bridging for iptables
+      block:
+        - name: Set net.ipv4.ip_forward
+          sysctl:
+            name: net.ipv4.ip_forward
+            value: '1'
+            state: present
+            sysctl_set: true
+
+        - name: Set net.bridge.bridge-nf-call-iptables
+          sysctl:
+            name: net.bridge.bridge-nf-call-iptables
+            value: '1'
+            state: present
+            sysctl_set: true
+
+    - name: Install containerd
+      apt:
+        name: containerd
+        state: present
+
+    - name: Configure containerd to use systemd cgroup driver
+      blockinfile:
+        path: /etc/containerd/config.toml
+        create: yes
+        block: |
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            SystemdCgroup = true
+      notify:
+        - Restart containerd
+
+    - name: Start & enable containerd
+      service:
+        name: containerd
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart containerd
+      service:
+        name: containerd
+        state: restarted
+
+- name: Install Kubernetes Packages (All Hosts)
+  hosts: all
+  become: true
+  tasks:
+    - name: Download Kubernetes apt key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+        dest: /tmp/Release.key
+
+    - name: Add Kubernetes apt key to keyring
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install kubeadm, kubelet, kubectl
+      apt:
+        name:
+          - kubeadm
+          - kubelet
+          - kubectl
+        state: present
+
+    - name: Hold kubelet, kubeadm, kubectl
+      command: apt-mark hold kubelet kubeadm kubectl
+
+- name: Master Node Reset + Init
+  hosts: master
+  become: true
+  vars:
+    master_ip: "{{ hostvars[inventory_hostname].ansible_default_ipv4.address }}"
+  tasks:
+    - name: Check if there is a leftover kube-apiserver manifest
+      stat:
+        path: /etc/kubernetes/manifests/kube-apiserver.yaml
+      register: leftover_apiserver
+
+    - name: Check if etcd data directory exists
+      stat:
+        path: /var/lib/etcd
+      register: leftover_etcd
+
+    - name: Reset any existing cluster if leftover artifacts exist
+      command: kubeadm reset -f
+      when:
+        - leftover_apiserver.stat.exists or leftover_etcd.stat.exists
+
+    - name: Remove /etc/kubernetes if leftover apiserver exists
+      file:
+        path: /etc/kubernetes
+        state: absent
+      when:
+        - leftover_apiserver.stat.exists
+
+    - name: Remove etcd data dir if leftover etcd exists
+      file:
+        path: /var/lib/etcd
+        state: absent
+      when:
+        - leftover_etcd.stat.exists
+
+    - name: Initialize Kubernetes cluster
+      command: >
+        kubeadm init
+        --apiserver-advertise-address={{ master_ip }}
+        --apiserver-cert-extra-sans={{ master_ip }}
+        --pod-network-cidr=10.244.0.0/16
+    
+
+    - name: Create .kube directory for root
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0700'
+
+    - name: Copy admin.conf to .kube/config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: yes
+        mode: '0600'
+
+    - name: Install Calico network plugin
+      command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+      changed_when: false
+
+    - name: Save join command to file
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: /tmp/kubeadm_join_command.txt
+        mode: '0600'
+
+
+- name: Worker Node Reset + Join
+  hosts: worker
+  become: true
+  tasks:
+    - name: Check if kubelet is already joined
+      command: kubectl get node {{ ansible_hostname }}
+      register: node_check
+      failed_when: false
+      changed_when: false
+      delegate_to: master-node
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: kubeadm reset on worker if previously joined
+      command: kubeadm reset -f
+      when: node_check.rc == 0
+
+    - name: Remove old configs
+      file:
+        path: /etc/kubernetes
+        state: absent
+      when: node_check.rc == 0
+
+    - name: Fetch join command from master
+      slurp:
+        src: /tmp/kubeadm_join_command.txt
+      register: join_file
+      delegate_to: master-node
+
+    - name: Write join command locally
+      copy:
+        dest: /tmp/kubeadm_join_command.sh
+        content: "{{ join_file.content | b64decode }}"
+        mode: '0700'
+
+    - name: Join cluster
+      shell: /tmp/kubeadm_join_command.sh
+      register: join_result
+
