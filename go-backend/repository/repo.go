@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"main/structs"
+	"strings"
 	"time"
 )
 
@@ -600,161 +601,134 @@ func GetDevicesByMeber(meberID int64) ([]structs.EdgeDevice, error) {
 	return devices, nil
 }
 
-// CheckDeviceEligibility checks if a device is eligible to install the given application
-func CheckDeviceEligibility(deviceID int64, appID int64) (bool, bool, *string, error) {
-	// Step 1: Check if the device already has the application instance
-	query := "SELECT COUNT(*) FROM application_instances WHERE device_id = ? AND app_id = ?"
-	var count int
-	err := DB.QueryRow(query, deviceID, appID).Scan(&count)
+func CheckDevicesEligibilityBulk(deviceIDs []int64, appID int64) ([]structs.EligibleDevice, error) {
+	if len(deviceIDs) == 0 {
+		return nil, nil
+	}
+
+	// Step 1: Construct the IN clause for device IDs
+	placeholders := make([]string, len(deviceIDs))
+	args := make([]interface{}, len(deviceIDs)+1) // +1 for appID
+	args[0] = appID
+
+	for i, id := range deviceIDs {
+		placeholders[i] = "?"
+		args[i+1] = id
+	}
+
+	inClause := strings.Join(placeholders, ",")
+
+	// Query for installed applications
+	installedQuery := fmt.Sprintf(`
+        SELECT device_id
+        FROM application_instances
+        WHERE app_id = ? AND device_id IN (%s)
+    `, inClause)
+
+	rows, err := DB.Query(installedQuery, args...)
 	if err != nil {
-		log.Printf("Error checking application instance for device %d and app %d: %v", deviceID, appID, err)
-		return false, false, nil, err
+		log.Printf("Error fetching installed applications for app %d: %v", appID, err)
+		return nil, err
 	}
-	if count > 0 {
-		reason := "Application already installed"
-		return false, true, &reason, nil
+	defer rows.Close()
+
+	installedMap := make(map[int64]bool)
+	for rows.Next() {
+		var deviceID int64
+		if err := rows.Scan(&deviceID); err != nil {
+			return nil, err
+		}
+		installedMap[deviceID] = true
 	}
 
-	// Step 2: Check if the application has required sensors
-	sensorCountQuery := "SELECT COUNT(*) FROM application_sensors WHERE application_sensors.application_id	 = ?"
-	var sensorCount int
-	err = DB.QueryRow(sensorCountQuery, appID).Scan(&sensorCount)
+	// Step 2: Fetch required sensors for the application
+	requiredSensorsQuery := `
+        SELECT sensor_id
+        FROM application_sensors
+        WHERE application_id = ?
+    `
+	requiredRows, err := DB.Query(requiredSensorsQuery, appID)
 	if err != nil {
-		log.Printf("Error checking sensor requirements for app %d: %v", appID, err)
-		return false, false, nil, err
+		log.Printf("Error fetching required sensors for app %d: %v", appID, err)
+		return nil, err
+	}
+	defer requiredRows.Close()
+
+	requiredSensors := make(map[int64]bool)
+	for requiredRows.Next() {
+		var sensorID int64
+		if err := requiredRows.Scan(&sensorID); err != nil {
+			return nil, err
+		}
+		requiredSensors[sensorID] = true
 	}
 
-	// If the application has no required sensors, it is eligible by default
-	if sensorCount == 0 {
-		return true, false, nil, nil
-	}
+	// Step 3: Fetch device sensors
+	deviceSensorsQuery := fmt.Sprintf(`
+        SELECT device_id, sensor_id
+        FROM device_sensors
+        WHERE device_id IN (%s)
+    `, inClause)
 
-	// Step 3: Check if the device has the required sensors
-	sensorCheckQuery := `
-		SELECT COUNT(*)
-		FROM application_sensors aps
-		JOIN device_sensors ds ON aps.sensor_id = ds.sensor_id
-		WHERE aps.application_id = ? AND ds.device_id = ?
-	`
-	err = DB.QueryRow(sensorCheckQuery, appID, deviceID).Scan(&count)
+	rows, err = DB.Query(deviceSensorsQuery, args[1:]...) // Skip the first arg (appID)
 	if err != nil {
-		log.Printf("Error checking sensors for device %d and app %d: %v", deviceID, appID, err)
-		return false, false, nil, err
+		log.Printf("Error fetching device sensors: %v", err)
+		return nil, err
 	}
-	if count < sensorCount {
-		reason := "Required sensors not present"
-		return false, false, &reason, nil
+	defer rows.Close()
+
+	deviceSensorMap := make(map[int64]map[int64]bool)
+	for rows.Next() {
+		var deviceID, sensorID int64
+		if err := rows.Scan(&deviceID, &sensorID); err != nil {
+			return nil, err
+		}
+		if _, exists := deviceSensorMap[deviceID]; !exists {
+			deviceSensorMap[deviceID] = make(map[int64]bool)
+		}
+		deviceSensorMap[deviceID][sensorID] = true
 	}
 
-	return true, false, nil, nil
+	// Step 4: Build the result list
+	var eligibleDevices []structs.EligibleDevice
+	for _, deviceID := range deviceIDs {
+		installed := installedMap[deviceID]
+		deviceSensors, hasSensors := deviceSensorMap[deviceID]
+
+		// Determine if all required sensors are present
+		hasAllSensors := true
+		if len(requiredSensors) > 0 {
+			if !hasSensors {
+				hasAllSensors = false
+			} else {
+				for sensorID := range requiredSensors {
+					if !deviceSensors[sensorID] {
+						hasAllSensors = false
+						break
+					}
+				}
+			}
+		}
+
+		// Determine eligibility and reason
+		eligible := !installed && hasAllSensors
+		reason := "Device is eligible"
+		if installed {
+			reason = "Application already installed"
+		} else if !hasAllSensors {
+			reason = "Required sensors not present"
+		}
+
+		eligibleDevices = append(eligibleDevices, structs.EligibleDevice{
+			Device:    "", // Set the device name in the service layer
+			Eligible:  eligible,
+			Installed: installed,
+			Reason:    reason,
+		})
+	}
+
+	return eligibleDevices, nil
 }
-
-//
-//// CheckDeviceEligibility checks if a device is eligible to install the given application
-//func CheckDeviceEligibility(deviceID int64, appID int64) (bool, *string, error) {
-//	// Step 1: Check if the device already has the application instance
-//	query := "SELECT COUNT(*) FROM application_instances WHERE device_id = ? AND app_id = ?"
-//	var count int
-//	err := DB.QueryRow(query, deviceID, appID).Scan(&count)
-//	if err != nil {
-//		log.Printf("Error checking application instance for device %d and app %d: %v", deviceID, appID, err)
-//		return false, nil, err
-//	}
-//	if count > 0 {
-//		reason := "Application already installed"
-//		return false, &reason, nil
-//	}
-//
-//	// Step 2: Check if the application has required sensors
-//	sensorCountQuery := "SELECT COUNT(*) FROM application_sensors WHERE application_id = ?"
-//	var sensorCount int
-//	err = DB.QueryRow(sensorCountQuery, appID).Scan(&sensorCount)
-//	if err != nil {
-//		log.Printf("Error checking sensor requirements for app %d: %v", appID, err)
-//		return false, nil, err
-//	}
-//
-//	// If the application has no required sensors, it is eligible by default
-//	if sensorCount == 0 {
-//		return true, nil, nil
-//	}
-//
-//	// Step 3: Check if the device has the required sensors
-//	sensorCheckQuery := `
-//		SELECT ds.sensor_id
-//		FROM application_sensors aps
-//		JOIN device_sensors ds ON aps.sensor_id = ds.sensor_id
-//		WHERE aps.application_id = ? AND ds.device_id = ?
-//	`
-//
-//	rows, err := DB.Query(sensorCheckQuery, appID, deviceID)
-//	if err != nil {
-//		log.Printf("Error retrieving sensors for device %d and app %d: %v", deviceID, appID, err)
-//		return false, nil, err
-//	}
-//	defer rows.Close()
-//
-//	var deviceSensorIDs []int64
-//	for rows.Next() {
-//		var sensorID int64
-//		err := rows.Scan(&sensorID)
-//		if err != nil {
-//			log.Printf("Error scanning sensor for device %d: %v", deviceID, err)
-//			return false, nil, err
-//		}
-//		deviceSensorIDs = append(deviceSensorIDs, sensorID)
-//	}
-//
-//	log.Printf("Device %d has sensors: %v", deviceID, deviceSensorIDs)
-//
-//	// Step 4: Get required sensors for the application
-//	requiredSensorQuery := "SELECT sensor_id FROM application_sensors WHERE application_id = ?"
-//	requiredRows, err := DB.Query(requiredSensorQuery, appID)
-//	if err != nil {
-//		log.Printf("Error retrieving required sensors for app %d: %v", appID, err)
-//		return false, nil, err
-//	}
-//	defer requiredRows.Close()
-//
-//	var requiredSensorIDs []int64
-//	for requiredRows.Next() {
-//		var sensorID int64
-//		err := requiredRows.Scan(&sensorID)
-//		if err != nil {
-//			log.Printf("Error scanning required sensor for app %d: %v", appID, err)
-//			return false, nil, err
-//		}
-//		requiredSensorIDs = append(requiredSensorIDs, sensorID)
-//	}
-//
-//	log.Printf("Application %d requires sensors: %v", appID, requiredSensorIDs)
-//
-//	// Step 5: Compare required sensors with device sensors
-//	requiredSensorsMap := make(map[int64]bool)
-//	for _, id := range requiredSensorIDs {
-//		requiredSensorsMap[id] = true
-//	}
-//
-//	for _, sensorID := range requiredSensorIDs {
-//		if !contains(deviceSensorIDs, sensorID) {
-//			reason := "Required sensors not present"
-//			log.Printf("Device %d does not have required sensor %d for app %d", deviceID, sensorID, appID)
-//			return false, &reason, nil
-//		}
-//	}
-//
-//	return true, nil, nil
-//}
-//
-//// Helper function to check if a slice contains a specific value
-//func contains(slice []int64, value int64) bool {
-//	for _, v := range slice {
-//		if v == value {
-//			return true
-//		}
-//	}
-//	return false
-//}
 
 func AddApplicationInstance(deviceID int64, appID int64) error {
 	query := "INSERT INTO application_instances (device_id, app_id, status, path) VALUES (?, ?, 'warning', ?)"

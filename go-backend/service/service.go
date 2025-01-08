@@ -105,12 +105,6 @@ func GetAllDevicesWithApplications(meberID int64) ([]structs.DeviceWithApplicati
 		devicesWithApps = append(devicesWithApps, *deviceDTO)
 	}
 
-	// Optionally, sort the slice by DeviceID or any other criteria if needed
-	// For example, sorting by device ID:
-	// sort.Slice(devicesWithApps, func(i, j int) bool {
-	//     return devicesWithApps[i].DeviceID < devicesWithApps[j].DeviceID
-	// })
-
 	return devicesWithApps, nil
 }
 
@@ -137,23 +131,26 @@ func GetEligibleDevices(meberID int64, appID int64) ([]structs.EligibleDevice, e
 		return nil, err
 	}
 
-	// Step 2: Check eligibility for each device
-	var eligibleDevices []structs.EligibleDevice
+	// Extract device IDs and names
+	var deviceIDs []int64
+	deviceNameMap := make(map[int64]string)
 	for _, device := range devices {
-		eligible, installed, reason, err := repository.CheckDeviceEligibility(device.ID, appID)
-		if err != nil {
-			return nil, err
-		}
-
-		eligibleDevices = append(eligibleDevices, structs.EligibleDevice{
-			Device:    device.Name,
-			Eligible:  eligible,
-			Installed: installed,
-			Reason:    reason,
-		})
+		deviceIDs = append(deviceIDs, device.ID)
+		deviceNameMap[device.ID] = device.Name
 	}
 
-	return eligibleDevices, nil
+	// Step 2: Fetch eligibility data in bulk
+	eligibilityData, err := repository.CheckDevicesEligibilityBulk(deviceIDs, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 3: Map device names to the results
+	for i := range eligibilityData {
+		eligibilityData[i].Device = deviceNameMap[deviceIDs[i]]
+	}
+
+	return eligibilityData, nil
 }
 
 // AddApplicationsToDevices adds applications to the specified devices
