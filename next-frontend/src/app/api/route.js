@@ -43,3 +43,25 @@ export const getDeviceData = async () => {
         throw new Error("Failed to fetch device data: " + err.message);
     }
 };
+
+export const getEligibleDevices = async (appId) => {
+    try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:8000/eligible-devices", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ application_id: appId }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (err) {
+        throw new Error("Failed to fetch eligible devices: " + err.message);
+    }
+};

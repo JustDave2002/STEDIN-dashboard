@@ -21,7 +21,7 @@ import {
   MonitorPlay,
   RefreshCcw,
 } from "lucide-react"
-import { getMapData, getDeviceData } from '@/app/api/mapData/route'
+import { getMapData, getDeviceData } from '@/app/api/route'
 import DynamicMap from "@/components/DynamicMap"
 
 export default function Dashboard() {

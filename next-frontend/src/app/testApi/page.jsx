@@ -42,7 +42,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getDeviceData } from "@/app/api/mapData/route";
+import { getDeviceData } from "@/app/api/route";
 
 export default function TestDevicesPage() {
   const [deviceData, setDeviceData] = useState(null);

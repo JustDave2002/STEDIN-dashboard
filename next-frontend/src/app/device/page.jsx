@@ -7,7 +7,7 @@ import {Input} from "@/components/ui/input";
 import {Button} from "@/components/ui/button";
 import {PlusCircle, Search, X} from 'lucide-react';
 import DeviceTable from "./device-table";
-import {getDeviceData} from "@/app/api/mapData/route";
+import {getDeviceData, getEligibleDevices} from "@/app/api/route";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {Checkbox} from "@/components/ui/checkbox";
 
@@ -69,84 +69,89 @@ export default function DevicePage() {
   }
 
   const fetchDevices = async (installApp, appIdFromStorage) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-
       const devices = await getDeviceData();
-
       let eligibilityData = {};
+
       if (installApp && appIdFromStorage) {
-        const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:8000/eligible-devices", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ application_id: appIdFromStorage }),
-        });
+        // Fetch eligibility data from the API
+        const eligibilityResponse = await getEligibleDevices(appIdFromStorage);
 
-        const data = await response.json();
+        // Process eligibility data
+        eligibilityData = processEligibilityData(eligibilityResponse);
 
-        eligibilityData = data.devices.reduce((acc, { name, isEligible, isInstalled, reason }) => {
-          acc[name] = { isEligible, isInstalled, reason };
-          return acc;
-        }, {});
-
-        const mergedDevices = devices.map((device) => {
-          const eligibilityInfo = eligibilityData[device.name];
-
-          if (!eligibilityInfo) {
-            console.warn(`No eligibility data found for device: ${device.name}`);
-          }
-
-          return {
-            ...device,
-            isEligible: eligibilityInfo?.isEligible ?? false, // Default to false
-            isInstalled: eligibilityInfo?.isInstalled ?? false, // Default to false
-            reason: eligibilityInfo?.reason || "Not found in eligibility data",
-          };
-        });
-
-        console.log("Merged Devices:", mergedDevices);
+        // Merge Eligibility data with device data
+        const mergedDevices = mergeEligibilityWithDevices(devices, eligibilityData);
 
         setAllDevices(mergedDevices);
         setFilteredDevices(mergedDevices);
+        setMapFilter(mergedDevices);
       } else{
         setAllDevices(devices);
         setFilteredDevices(devices);
+        setMapFilter(devices);
       }
-      setMapFilter(devices);
-
       //populate filters
-      const statusSet = new Set();
-      const applicatieSet = new Set();
-      const gemeenteSet = new Set();
-
-      devices.forEach((device) => {
-        statusSet.add(device.status);
-
-        const locationTag = device.tags.find((tag) => tag.type === "location");
-        if (locationTag) {
-          gemeenteSet.add(locationTag.name);
-        }
-
-        device.applications.forEach((app) => {
-          applicatieSet.add(app.name);
-        });
-      });
-
-      setFilters({
-        status: Array.from(statusSet),
-        applicatie: Array.from(applicatieSet),
-        gemeente: Array.from(gemeenteSet),
-      });
+      populateFilters(devices);
 
     } catch (error) {
       console.error("Error fetching devices:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper: Process eligibility data
+  const processEligibilityData = (eligibilityResponse) => {
+    return eligibilityResponse.devices.reduce((acc, { name, isEligible, isInstalled, reason }) => {
+      acc[name] = { isEligible, isInstalled, reason };
+      return acc;
+    }, {});
+  };
+
+  // Helper: Merge eligibility data with devices
+  const mergeEligibilityWithDevices = (devices, eligibilityData) => {
+    return devices.map((device) => {
+      const eligibilityInfo = eligibilityData[device.name];
+
+      if (!eligibilityInfo) {
+        console.warn(`No eligibility data found for device: ${device.name}`);
+      }
+
+      return {
+        ...device,
+        isEligible: eligibilityInfo?.isEligible ?? false, // Default to false
+        isInstalled: eligibilityInfo?.isInstalled ?? false, // Default to false
+        reason: eligibilityInfo?.reason || "Not found in eligibility data",
+      };
+    });
+  };
+
+  // Helper: Populate filters
+  const populateFilters = (devices) => {
+    const statusSet = new Set();
+    const applicatieSet = new Set();
+    const gemeenteSet = new Set();
+
+    devices.forEach((device) => {
+      statusSet.add(device.status);
+
+      const locationTag = device.tags.find((tag) => tag.type === "location");
+      if (locationTag) {
+        gemeenteSet.add(locationTag.name);
+      }
+
+      device.applications.forEach((app) => {
+        applicatieSet.add(app.name);
+      });
+    });
+
+    setFilters({
+      status: Array.from(statusSet),
+      applicatie: Array.from(applicatieSet),
+      gemeente: Array.from(gemeenteSet),
+    });
   };
 
   // Handle search term change with debounce
@@ -218,25 +223,6 @@ export default function DevicePage() {
     }
   };
 
-
-
-
-
-  // const applyFilters = useCallback((devices, filters, searchTerm) => {
-  //   return devices.filter((device) => {
-  //     const statusMatch = filters.status.length === 0 || filters.status.includes(device.status);
-  //     const applicatieMatch = filters.applicatie.length === 0 || device.applications.some((app) => filters.applicatie.includes(app.name));
-  //     const gemeenteMatch = filters.gemeente.length === 0 || device.tags.some((tag) => tag.type === "location" && filters.gemeente.includes(tag.name));
-  //
-  //     const searchMatch = searchTerm === "" ||
-  //       device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       device.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       device.applications.some((app) => app.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-  //       device.tags.some((tag) => tag.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  //
-  //     return statusMatch && applicatieMatch && gemeenteMatch && searchMatch;
-  //   });
-  // }, []);
 
   const displayedDevices = useMemo(() => {
     const devicesToFilter = isViewingFilteredResults ? filteredDevices : allDevices;
