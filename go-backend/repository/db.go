@@ -12,12 +12,16 @@ import (
 
 var DB *sql.DB
 
-func InitDB() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+func InitDB(relativePath string) {
+	envPath := ".env"
+	if relativePath != "" {
+		envPath = relativePath
 	}
 
+	err := godotenv.Load(envPath)
+	if err != nil {
+		log.Fatalf("Error loading .env file from path '%s': %v", envPath, err)
+	}
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("MYSQL_ROOT_PASSWORD")
 	dbHost := os.Getenv("DB_HOST")

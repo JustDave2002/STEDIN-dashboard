@@ -239,7 +239,7 @@ func GetApplicationInstancesByDeviceID(deviceID int64) ([]structs.ApplicationIns
 }
 
 // Fetches all devices and their associated applications from the database
-func GetAllDevicesWithApplications(meberID int64) ([]struct {
+var GetAllDevicesWithApplications = func(meberID int64) ([]struct {
 	DeviceID             int64
 	DeviceName           string
 	DeviceStatus         string
@@ -406,7 +406,7 @@ func GetMeberTags(meberID int64) ([]string, error) {
 }
 
 // GetAllMebers retrieves all mebers from the database
-func GetAllMebers() ([]structs.Meber, error) {
+var GetAllMebers = func() ([]structs.Meber, error) {
 	query := `SELECT m.id, m.name, r.id AS role_id, r.name AS role_name FROM mebers m LEFT JOIN meber_roles mr ON m.id = mr.meber_id LEFT JOIN roles r ON mr.role_id = r.id`
 
 	rows, err := DB.Query(query)
@@ -437,7 +437,7 @@ func GetAllMebers() ([]structs.Meber, error) {
 }
 
 // GetMeberByID retrieves a meber from the database by ID
-func GetMeberByID(meberID int64) (*structs.Meber, error) {
+var GetMeberByID = func(meberID int64) (*structs.Meber, error) {
 	query := "SELECT id, name FROM mebers WHERE id = ?"
 	row := DB.QueryRow(query, meberID)
 

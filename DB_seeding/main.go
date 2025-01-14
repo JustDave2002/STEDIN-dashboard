@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	numDevices          = 2000
-	numApplications     = 4
+	numDevices          = 20000
 	seedFilePath        = "seed.sql"
 	maxWorkers          = 50
 	errorRatePercent    = 0.2 // 0.1% error rate for edge devices
@@ -47,6 +46,11 @@ func main() {
 	}
 	defer db.Close()
 
+	// Verify the connection
+	if err = db.Ping(); err != nil {
+		fmt.Println("Error pinging the database:", err)
+		return
+	}
 	fmt.Println("Connected to the database successfully!")
 	rand.Seed(time.Now().UnixNano())
 
@@ -95,7 +99,7 @@ func concurrentSeeder(db *sql.DB, function int, iterations int) {
 
 			if function == 0 {
 				seedEdgeDevice(db, i)
-				fmt.Println("Finished seeding device ", i)
+				//fmt.Println("Finished seeding device ", i)
 			}
 
 			<-workerChannel // Release the worker
@@ -103,11 +107,16 @@ func concurrentSeeder(db *sql.DB, function int, iterations int) {
 	}
 
 	wg.Wait() // Wait for all Goroutines to complete
-	println("Finished concurrency")
+	fmt.Println("Finished concurrency")
 }
 
 // Function to empty all tables and execute seed.sql
 func resetDatabase(db *sql.DB) error {
+	// Verify the connection
+	if err := db.Ping(); err != nil {
+		fmt.Println("Error pinging the database:", err)
+		return err
+	}
 	// Define tables to truncate in dependency order
 	tables := []string{
 		"application_instances", "application_sensors", "applications", "device_sensors",
@@ -158,7 +167,7 @@ func executeSQLFile(db *sql.DB) error {
 		if _, err := db.Exec(command); err != nil {
 			log.Printf("failed to execute command: %s, error: %v", command, err)
 		} else {
-			log.Printf("executed command: %s", command)
+			fmt.Println("executed command:", command)
 		}
 	}
 
