@@ -1,0 +1,225 @@
+- hosts: master
+  become: true
+  tasks:
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+          - iptables
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap temporarily
+      command: swapoff -a
+
+    - name: Temporarily enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: no  # Temporary change
+
+    - name: Set up temporary iptables rules for Kubernetes ports
+      shell: |
+        iptables -A INPUT -p tcp --dport 6443 -j ACCEPT  # Allow API server port
+        iptables -A INPUT -p tcp --dport 2379 -j ACCEPT  # etcd server client API
+        iptables -A INPUT -p tcp --dport 2380 -j ACCEPT  # etcd server peer API
+        iptables -A INPUT -p tcp --dport 10250 -j ACCEPT  # kubelet API
+        iptables -A INPUT -p tcp --dport 10251 -j ACCEPT  # kube-scheduler
+        iptables -A INPUT -p tcp --dport 10252 -j ACCEPT  # kube-controller-manager
+      args:
+        executable: /bin/bash
+
+    - name: Ensure the directory /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes apt key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+        dest: /tmp/Release.key
+
+    - name: Add Kubernetes apt key to keyring
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet, kubeadm, and kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Hold kubelet, kubeadm, and kubectl at the current version
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    - name: Run kubeadm init (Control Plane Initialization)
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12
+      register: kubeadm_output
+      ignore_errors: true  # Ignore if the cluster is already initialized
+
+    - name: Ensure .kube directory exists for specified user
+      file:
+        path: "/home/{{ kube_user }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ kube_user }}"
+        group: "{{ kube_user }}"
+
+    - name: Copy Kubernetes admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "/home/{{ kube_user }}/.kube/config"
+        remote_src: yes
+        owner: "{{ kube_user }}"
+        group: "{{ kube_user }}"
+
+    - name: Install Calico network plugin
+      become: yes
+      become_user: "{{ kube_user }}"
+      shell: |
+        kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+      when: kubeadm_output.changed  # Only if 'kubeadm init' ran successfully
+
+    - name: Generate join command and store in a shared file
+      command: kubeadm token create --print-join-command
+      register: join_command
+      when: kubeadm_output.changed
+
+    - name: Save the join command to a shared file
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: /tmp/kube_join_command.txt
+      when: join_command is defined and join_command.stdout is defined
+
+    - name: Distribute join configuration to worker nodes
+      copy:
+        src: /tmp/kube_join_command.txt
+        dest: /tmp/kube_join_command.txt
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['worker'] }}"
+      become: true
+
+    - name: Distribute admin.conf to worker nodes for kubelet access
+      copy:
+        src: "/home/{{ kube_user }}/.kube/config"
+        dest: /tmp/admin.conf
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['worker'] }}"
+      become: true
+
+- hosts: worker
+  become: true
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisites on worker nodes
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap temporarily on worker nodes
+      command: swapoff -a
+
+    - name: Add Kubernetes apt key on worker nodes
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository on worker nodes
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo on worker nodes
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet and kubeadm on worker nodes
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+        state: present
+
+    - name: Hold kubelet and kubeadm at the current version
+      command: apt-mark hold kubelet kubeadm
+
+    - name: Check if node is already part of a Kubernetes cluster
+      command: kubeadm token list
+      register: token_check
+      failed_when: token_check.rc !=0 and token_check.rc !=1
+      changed_when: false
+
+    - name: Reset kubeadm on worker node if it is already part of a cluster
+      command: kubeadm reset -f
+      when: token_check.rc == 0 # Only reset if kubeadm token list succeeds
+      ignore_errors: true # In case the reset partially fails
+
+    - name: Clean up Kubernetes directories after reset
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+        - /etc/cni/net.d
+      when: token_check.rc == 0 # Clean up only if node was part of a cluster
+
+    - name: Ensure /etc/kubernetes directory exists
+      file:
+        path: /etc/kubernetes
+        state: directory
+        mode: '0755'
+
+    - name: Move admin.conf to /etc/kubernetes directory
+      copy:
+        src: /tmp/admin.conf
+        dest: /etc/kubernetes/admin.conf
+        remote_src: yes
+        mode: '0644'
+
+    - name: Join worker node to Kubernetes cluster using shared join command
+      command: "{{ lookup('file', '/tmp/kube_join_command.txt') }}"
+      when: ansible_facts['os_family'] == 'Debian'
