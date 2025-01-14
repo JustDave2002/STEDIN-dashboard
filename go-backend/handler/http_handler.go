@@ -13,30 +13,30 @@ import (
 	"main/service"
 )
 
-func GetDeviceHandler(w http.ResponseWriter, r *http.Request) {
-	queryParams := r.URL.Query()
-	deviceIDStr := queryParams.Get("id")
-	if deviceIDStr == "" {
-		http.Error(w, "Device ID is required", http.StatusBadRequest)
-		return
-	}
-
-	deviceID, err := strconv.ParseInt(deviceIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid device ID", http.StatusBadRequest)
-		return
-	}
-
-	device, err := service.GetEdgeDevice(deviceID)
-	if err != nil {
-		http.Error(w, "Device not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(device)
-}
+//func GetDeviceHandler(w http.ResponseWriter, r *http.Request) {
+//	queryParams := r.URL.Query()
+//	deviceIDStr := queryParams.Get("id")
+//	if deviceIDStr == "" {
+//		http.Error(w, "Device ID is required", http.StatusBadRequest)
+//		return
+//	}
+//
+//	deviceID, err := strconv.ParseInt(deviceIDStr, 10, 64)
+//	if err != nil {
+//		http.Error(w, "Invalid device ID", http.StatusBadRequest)
+//		return
+//	}
+//
+//	device, err := service.GetEdgeDevice(deviceID)
+//	if err != nil {
+//		http.Error(w, "Device not found", http.StatusNotFound)
+//		return
+//	}
+//
+//	w.Header().Set("Content-Type", "application/json")
+//	w.WriteHeader(http.StatusOK)
+//	json.NewEncoder(w).Encode(device)
+//}
 
 func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
@@ -152,7 +152,7 @@ func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		ApplicationID int64 `json:"application_id"`
 	}
 	err := json.NewDecoder(r.Body).Decode(&requestBody)
-	if err != nil {
+	if err != nil || requestBody.ApplicationID == 0 { // Check if ApplicationID is missing or invalid
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -210,16 +210,21 @@ func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Applications added to devices successfully"))
 }
 
-// LogsHandler processes the request to fetch logs
 func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Extract query parameters (e.g., device ID, appInstanceID, date range, etc.)
 	queryParams := r.URL.Query()
 	deviceIDStr := queryParams.Get("device_id")
-	appInstanceIDStr := queryParams.Get("app_instance_id") // Extract appInstanceID
+	appInstanceIDStr := queryParams.Get("app_instance_id")
 	startDateStr := queryParams.Get("start_date")
 	endDateStr := queryParams.Get("end_date")
 
-	var deviceID, appInstanceID int64 // Declare deviceID and appInstanceID
+	// Ensure at least one required query parameter is provided
+	if deviceIDStr == "" && appInstanceIDStr == "" {
+		http.Error(w, "Missing required query parameters: device_id or app_instance_id", http.StatusBadRequest)
+		return
+	}
+
+	var deviceID, appInstanceID int64
 	var err error
 
 	// Validate and parse the device ID if provided
@@ -233,7 +238,7 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate and parse the appInstanceID if provided
 	if appInstanceIDStr != "" {
-		appInstanceID, err = strconv.ParseInt(appInstanceIDStr, 10, 64) // Parse appInstanceID
+		appInstanceID, err = strconv.ParseInt(appInstanceIDStr, 10, 64)
 		if err != nil {
 			http.Error(w, "Invalid appInstanceID", http.StatusBadRequest)
 			return
@@ -245,7 +250,7 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	if startDateStr != "" {
 		startDateParsed, err := time.Parse("2006-01-02", startDateStr)
 		if err != nil {
-			http.Error(w, "Invalid start date format", http.StatusBadRequest)
+			http.Error(w, "Invalid start date format, expected YYYY-MM-DD", http.StatusBadRequest)
 			return
 		}
 		startDate = &startDateParsed
@@ -254,14 +259,14 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	if endDateStr != "" {
 		endDateParsed, err := time.Parse("2006-01-02", endDateStr)
 		if err != nil {
-			http.Error(w, "Invalid end date format", http.StatusBadRequest)
+			http.Error(w, "Invalid end date format, expected YYYY-MM-DD", http.StatusBadRequest)
 			return
 		}
 		endDate = &endDateParsed
 	}
 
 	// Step 2: Call the service to get the logs based on query parameters
-	logs, err := service.GetLogs(deviceID, appInstanceID, startDate, endDate) // Use appInstanceID here
+	logs, err := service.GetLogs(deviceID, appInstanceID, startDate, endDate)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error retrieving logs: %v", err), http.StatusInternalServerError)
 		return
