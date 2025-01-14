@@ -5,16 +5,91 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./go-backend
 
     steps:
-      - uses: actions/checkout@v4
+      # Step 1: Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Go
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.23'
-      - run: go mod download
-      - run: go build -v ./...
-      - run: go test -v ./...
+
+      # Step 3: Install Docker Compose
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      # Step 4: Set up environment files
+      - name: Set up environment files
+        run: |
+          cp ./DB_seeding/.env.example ./DB_seeding/.env
+          cp ./go-backend/.env.example ./go-backend/.env
+
+      # Step 5: Verify .env contents and format
+      - name: Verify .env contents
+        working-directory: ./DB_seeding
+        run: |
+          cat .env
+          dos2unix .env || true
+          ls -l .env
+
+      - name: Debug env files
+        run: |
+          echo "DB_seeding directory:"
+          ls -al DB_seeding
+          echo "go-backend directory:"
+          ls -al go-backend
+
+      # Step 6: Start Docker Compose
+      - name: Start Docker Compose
+        working-directory: ./DB_seeding
+        run: docker-compose up -d
+
+
+      # Step 7: Wait-for-database loop
+      - name: Wait for Database
+        run: |
+          source ./DB_seeding/.env
+          echo "Wait script using root password: $MYSQL_ROOT_PASSWORD"
+
+          for i in {1..20}; do
+            echo "Attempt $i..."
+            docker exec mariadb_backend mariadb-admin ping \
+              -u root \
+              --password="$MYSQL_ROOT_PASSWORD" \
+              --host=0.0.0.0 && break
+
+            echo "Waiting for database to be ready..."
+            sleep 5
+          done
+      
+
+      # Step 8: Seed the database
+      - name: Seed the database
+        working-directory: ./DB_seeding
+        run: go run .
+
+      # Step 9: Install dependencies for go-backend
+      - name: Download dependencies
+        working-directory: ./go-backend
+        run: go mod download
+
+      # Step 10: Build the main application
+      - name: Build the project
+        working-directory: ./go-backend
+        run: go build -v ./...
+
+      # Step 11: Run the tests
+      - name: Run tests
+        working-directory: ./go-backend
+        run: go test -v ./...
+
+      # Step 12: Stop and clean up Docker Compose
+      - name: Tear down Docker Compose
+        if: always()
+        working-directory: ./DB_seeding
+        run: docker-compose down
