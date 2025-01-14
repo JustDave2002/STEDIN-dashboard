@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
-	return repository.GetDeviceByID(deviceID)
-}
-
-func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
-	return repository.GetAllDevices()
-}
+//func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
+//	return repository.GetDeviceByID(deviceID)
+//}
+//
+//func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
+//	return repository.GetAllDevices()
+//}
 
 func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
 
