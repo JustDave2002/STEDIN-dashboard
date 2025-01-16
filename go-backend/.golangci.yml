@@ -1,0 +1,16 @@
+# .golangci.yml
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet       # Reports suspicious constructs
+    - gofmt       # Checks formatting
+    - golint      # Style guide issues
+    - staticcheck # Detects bugs and performance issues
+    - errcheck    # Checks for unchecked errors
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 50
+  max-same-issues: 3
