@@ -1,13 +1,4 @@
 name: Build and Deploy
-#
-#on:
-#  push:
-#    branches:
-#      - main
-#  pull_request:
-#    branches:
-#      - main
-
 on:
   workflow_run:
     workflows: ["Test Pipeline"]
