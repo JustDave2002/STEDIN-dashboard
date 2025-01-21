@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./go-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - MYSQL_HOST=mariadb
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=MooiWachtwoord1!
+      - MYSQL_DATABASE=edge_management
+    depends_on:
+      - mariadb
+
+  mariadb:
+    image: mariadb:10.5
+    environment:
+      - MYSQL_ROOT_PASSWORD=MooiWachtwoord1!
+      - MYSQL_DATABASE=edge_management
+    ports:
+      - "3306:3306"

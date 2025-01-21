@@ -1,0 +1,111 @@
+name: Build and Deploy
+#
+#on:
+#  push:
+#    branches:
+#      - main
+#  pull_request:
+#    branches:
+#      - main
+
+on:
+  workflow_run:
+    workflows: ["Test Pipeline"]
+    types:
+      - completed
+
+jobs:
+  check-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Download test results
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: ./go-backend
+
+      # Step 2: Check test results
+      - name: Verify tests
+        run: |
+          if grep -q "FAIL" ./go-backend/test-results.txt; then
+            echo "Tests failed, stopping deployment."
+            exit 1
+          else
+            echo "Tests passed, proceeding to build and deploy."
+          fi
+
+  build-and-deploy:
+    needs: check-tests
+    if: github.event.workflow_run.conclusion == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 3: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up environment variables
+        run: |
+          # Ensure empty .env files exist
+          touch ./DB_seeding/.env
+          touch ./go-backend/.env
+          
+          # Populate DB_seeding/.env
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> ./DB_seeding/.env
+          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> ./DB_seeding/.env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> ./DB_seeding/.env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> ./DB_seeding/.env
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> ./DB_seeding/.env
+          
+          # Populate go-backend/.env
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> ./go-backend/.env
+          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> ./go-backend/.env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> ./go-backend/.env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> ./go-backend/.env
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> ./go-backend/.env
+          
+          # Debugging: Show env contents
+          echo "DB Seeder env file:"
+          cat ./DB_seeding/.env
+          echo "Go Backend env file:"
+          cat ./go-backend/.env
+
+      # Step 4: Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # Step 5: Install and build frontend
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      # Step 6: Build and push Docker images
+      - name: Login to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push backend Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/myapp-backend:latest ./go-backend
+          docker push ghcr.io/${{ github.repository_owner }}/myapp-backend:latest
+
+      - name: Build and push frontend Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/myapp-frontend:latest ./frontend
+          docker push ghcr.io/${{ github.repository_owner }}/myapp-frontend:latest
+
+      # Step 7: Deploy to Vercel & Railway
+      - name: Deploy frontend to Vercel
+        working-directory: ./frontend
+        run: npx vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --confirm
+
+      - name: Deploy backend to Railway
+        run: curl -X POST "https://api.railway.app/v1/services/${{ secrets.RAILWAY_SERVICE_ID }}/deploy" \
+          -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}"

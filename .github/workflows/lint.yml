@@ -32,4 +32,4 @@ jobs:
           working-directory: ./go-backend
 
       - name: Run golangci-lint
-        run: golangci-lint run --out-format=github-actions --timeout=5m
+        run: golangci-lint run --out-format=github-actions --verbose --timeout=5m
