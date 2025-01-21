@@ -64,7 +64,7 @@ jobs:
           source ./DB_seeding/.env
           for i in {1..20}; do
             echo "Attempt $i..."
-            docker exec mariadb_backend mariadb-admin ping -u root --password="$MYSQL_ROOT_PASSWORD" --host=0.0.0.0 && break
+            docker exec mariadb mariadb-admin ping -u root --password="$MYSQL_ROOT_PASSWORD" --host=0.0.0.0 && break
             echo "Waiting for database to be ready..."
             sleep 5
           done
