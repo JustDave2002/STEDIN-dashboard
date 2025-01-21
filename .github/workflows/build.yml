@@ -15,8 +15,8 @@ on:
       - completed
 
 jobs:
-  name: Build and Deploy
   check-tests:
+    name: check tests
     runs-on: ubuntu-latest
 
     steps:
@@ -38,6 +38,7 @@ jobs:
           fi
 
   build-and-deploy:
+    name: Build and Deploy
     needs: check-tests
     if: github.event.workflow_run.conclusion == 'success' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
