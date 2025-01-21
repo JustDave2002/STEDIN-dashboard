@@ -10,7 +10,7 @@ name: Build and Deploy
 
 on:
   workflow_run:
-    workflows: ["Test Pipeline / test"]
+    workflows: ["Test Pipeline"]
     types:
       - completed
 
