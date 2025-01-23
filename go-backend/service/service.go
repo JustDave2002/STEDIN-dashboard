@@ -1,20 +1,17 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"log"
+	"main/k8sclient"
 	"main/repository"
 	"main/structs"
+	"os"
+	"os/exec"
 	"time"
 )
-
-//func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
-//	return repository.GetDeviceByID(deviceID)
-//}
-//
-//func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
-//	return repository.GetAllDevices()
-//}
 
 func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
 
@@ -58,22 +55,22 @@ func GetAllDevicesWithApplications(meberID int64) ([]structs.DeviceWithApplicati
 		}
 
 		// Add application data
-		if result.InstanceID > 0 {
+		if result.InstanceID != nil && *result.InstanceID > 0 {
 			appExists := false
 			for _, app := range deviceMap[result.DeviceID].Applications {
-				if app.InstanceID == result.InstanceID {
+				if app.InstanceID == *result.InstanceID {
 					appExists = true
 					break
 				}
 			}
 			if !appExists {
 				deviceMap[result.DeviceID].Applications = append(deviceMap[result.DeviceID].Applications, structs.ApplicationInstanceDTO{
-					InstanceID:  result.InstanceID,
-					Name:        result.AppName,
-					Status:      result.AppStatus,
-					Path:        result.AppPath,
-					Description: result.AppDescription,
-					Version:     result.AppVersion,
+					InstanceID:  *result.InstanceID,
+					Name:        *result.AppName,
+					Status:      *result.AppStatus,
+					Path:        *result.AppPath,
+					Description: *result.AppDescription,
+					Version:     *result.AppVersion,
 				})
 			}
 		}
@@ -153,8 +150,7 @@ func GetEligibleDevices(meberID int64, appID int64) ([]structs.EligibleDevice, e
 	return eligibilityData, nil
 }
 
-// AddApplicationsToDevices adds applications to the specified devices
-func AddApplicationsToDevices(userID int64, appID int64, deviceIDs []int64) error {
+func AddApplicationsToDevices(ctx context.Context, clientset *kubernetes.Clientset, userID int64, appID int64, deviceIDs []int64) error {
 	// Step 1: Verify that the user has access to the devices
 	devices, err := repository.GetDevicesByMeber(userID)
 	if err != nil {
@@ -172,14 +168,57 @@ func AddApplicationsToDevices(userID int64, appID int64, deviceIDs []int64) erro
 		}
 	}
 
-	// Step 2: Add application instances to the devices
+	// Step 2: Retrieve the application's image URL
+	imageURL, err := repository.GetApplicationRepoURL(appID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve repo_url for application %d: %w", appID, err)
+	}
+
+	// Step 3: Add application instances and deploy them to Kubernetes
 	for _, deviceID := range deviceIDs {
+		// Add the application instance to the database
 		err := repository.AddApplicationInstance(deviceID, appID)
 		if err != nil {
 			return fmt.Errorf("error adding application %d to device %d: %w", appID, deviceID, err)
 		}
+
+		// Deploy the application to Kubernetes
+		appPath, deployErr := DeployApplicationToKubernetes(ctx, clientset, "edge-devices", imageURL, deviceID, appID)
+		if deployErr != nil {
+			return fmt.Errorf("error deploying application %d to device %d: %w", appID, deviceID, deployErr)
+		}
+
+		// Update the application's path in the database
+		err = repository.UpdateApplicationPath(deviceID, appID, appPath)
+		if err != nil {
+			return fmt.Errorf("error updating path for application %d on device %d: %w", appID, deviceID, err)
+		}
 	}
 
+	return nil
+}
+
+// DeployApplicationToKubernetes deploys the application to the Kubernetes pod of the specified device
+func DeployApplicationToKubernetes(ctx context.Context, clientset *kubernetes.Clientset, namespace, imageURL string, deviceID int64, appID int64) (string, error) {
+	// Deploy the container to the Kubernetes pod
+	appPath, err := k8sclient.DeployAppToDevice(ctx, clientset, namespace, deviceID, appID, imageURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to deploy app to Kubernetes: %w", err)
+	}
+
+	return appPath, nil
+}
+
+// BuildDockerImage builds a Docker image from the given repository URL
+func BuildDockerImage(repoURL, imageName string) error {
+	cmd := exec.Command("docker", "build", "-t", imageName, repoURL)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error building Docker image: %w", err)
+	}
 	return nil
 }
 

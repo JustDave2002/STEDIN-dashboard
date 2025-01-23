@@ -248,12 +248,12 @@ var GetAllDevicesWithApplications = func(meberID int64) ([]struct {
 	Longitude            float64
 	Latitude             float64
 	DeviceIPAddress      string
-	InstanceID           int64
-	AppName              string
-	AppStatus            string
-	AppPath              string
-	AppDescription       string
-	AppVersion           string
+	InstanceID           *int64
+	AppName              *string
+	AppStatus            *string
+	AppPath              *string
+	AppDescription       *string
+	AppVersion           *string
 	TagID                *int64
 	TagName              *string
 	TagType              *string
@@ -324,12 +324,12 @@ var GetAllDevicesWithApplications = func(meberID int64) ([]struct {
 		Longitude            float64
 		Latitude             float64
 		DeviceIPAddress      string
-		InstanceID           int64
-		AppName              string
-		AppStatus            string
-		AppPath              string
-		AppDescription       string
-		AppVersion           string
+		InstanceID           *int64
+		AppName              *string
+		AppStatus            *string
+		AppPath              *string
+		AppDescription       *string
+		AppVersion           *string
 		TagID                *int64
 		TagName              *string
 		TagType              *string
@@ -348,12 +348,12 @@ var GetAllDevicesWithApplications = func(meberID int64) ([]struct {
 			Longitude            float64
 			Latitude             float64
 			DeviceIPAddress      string
-			InstanceID           int64
-			AppName              string
-			AppStatus            string
-			AppPath              string
-			AppDescription       string
-			AppVersion           string
+			InstanceID           *int64
+			AppName              *string
+			AppStatus            *string
+			AppPath              *string
+			AppDescription       *string
+			AppVersion           *string
 			TagID                *int64
 			TagName              *string
 			TagType              *string
@@ -731,13 +731,38 @@ func CheckDevicesEligibilityBulk(deviceIDs []int64, appID int64) ([]structs.Elig
 }
 
 func AddApplicationInstance(deviceID int64, appID int64) error {
-	query := "INSERT INTO application_instances (device_id, app_id, status, path) VALUES (?, ?, 'warning', ?)"
+	query := "INSERT INTO application_instances (device_id, app_id, status, path) VALUES (?, ?, 'online', ?)"
 	_, err := DB.Exec(query, deviceID, appID, "/path/to/newly created app")
 	if err != nil {
 		log.Printf("Error adding application instance for device %d and app %d: %v", deviceID, appID, err)
 		return err
 	}
 	return nil
+}
+
+// UpdateApplicationPath updates the path of an application instance in the database
+func UpdateApplicationPath(deviceID int64, appID int64, path string) error {
+	query := "UPDATE application_instances SET path = ? WHERE device_id = ? AND app_id = ?"
+	_, err := DB.Exec(query, path, deviceID, appID)
+	if err != nil {
+		log.Printf("Error updating application path for device %d and app %d: %v", deviceID, appID, err)
+		return err
+	}
+	return nil
+}
+
+// GetApplicationRepoURL retrieves the repo_url for a given application ID
+func GetApplicationRepoURL(appID int64) (string, error) {
+	var repoURL string
+	query := "SELECT repo_url FROM applications WHERE id = ?"
+	err := DB.QueryRow(query, appID).Scan(&repoURL)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("application with ID %d not found", appID)
+		}
+		return "", fmt.Errorf("error retrieving repo_url for application %d: %w", appID, err)
+	}
+	return repoURL, nil
 }
 
 // FetchLogs retrieves logs based on the given parameters

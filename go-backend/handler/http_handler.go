@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"k8s.io/client-go/kubernetes"
 	"main/middleware"
 	"main/structs"
 	"net/http"
@@ -12,31 +14,6 @@ import (
 
 	"main/service"
 )
-
-//func GetDeviceHandler(w http.ResponseWriter, r *http.Request) {
-//	queryParams := r.URL.Query()
-//	deviceIDStr := queryParams.Get("id")
-//	if deviceIDStr == "" {
-//		http.Error(w, "Device ID is required", http.StatusBadRequest)
-//		return
-//	}
-//
-//	deviceID, err := strconv.ParseInt(deviceIDStr, 10, 64)
-//	if err != nil {
-//		http.Error(w, "Invalid device ID", http.StatusBadRequest)
-//		return
-//	}
-//
-//	device, err := service.GetEdgeDevice(deviceID)
-//	if err != nil {
-//		http.Error(w, "Device not found", http.StatusNotFound)
-//		return
-//	}
-//
-//	w.Header().Set("Content-Type", "application/json")
-//	w.WriteHeader(http.StatusOK)
-//	json.NewEncoder(w).Encode(device)
-//}
 
 func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
 	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
@@ -56,7 +33,6 @@ func GetAllDevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllDevicesMapHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract meber ID from context
 	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
 	if !ok {
 		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
@@ -69,21 +45,18 @@ func GetAllDevicesMapHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Respond with JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(devices)
 }
 
 func GetAllMebersHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Call the service function to get all mebers
 	mebers, err := service.GetAllMebers()
 	if err != nil {
 		http.Error(w, "Error retrieving mebers", http.StatusInternalServerError)
 		return
 	}
 
-	// Step 2: Set response headers and write the response as JSON
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(mebers)
@@ -140,14 +113,12 @@ func AppStoreHandler(w http.ResponseWriter, r *http.Request) {
 
 // EligibleDevicesHandler handles the /eligible-devices endpoint to return eligible devices for an application
 func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract meber ID from JWT
 	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
 	if !ok {
 		http.Error(w, "Meber ID missing from context", http.StatusUnauthorized)
 		return
 	}
 
-	// Step 2: Parse the request body to get the application ID
 	var requestBody struct {
 		ApplicationID int64 `json:"application_id"`
 	}
@@ -157,21 +128,18 @@ func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Get eligible devices
 	eligibleDevices, err := service.GetEligibleDevices(meberID, requestBody.ApplicationID)
 	if err != nil {
 		http.Error(w, "Error retrieving eligible devices", http.StatusInternalServerError)
 		return
 	}
 
-	// Step 4: Wrap the response
 	response := struct {
 		Devices []structs.EligibleDevice `json:"devices"`
 	}{
 		Devices: eligibleDevices,
 	}
 
-	// Step 5: Encode the wrapped response
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
@@ -180,15 +148,13 @@ func EligibleDevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // AddApplicationsToDevicesHandler handles the /add-applications endpoint to add applications to devices
-func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract user ID from JWT
+func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request, clientset *kubernetes.Clientset, ctx context.Context) {
 	meberID, ok := r.Context().Value(middleware.MeberIDKey).(int64)
 	if !ok {
 		http.Error(w, "User ID missing from context", http.StatusUnauthorized)
 		return
 	}
 
-	// Step 2: Parse the request body to get the device IDs and application ID
 	var requestBody struct {
 		AppID     int64   `json:"application_id"`
 		DeviceIDs []int64 `json:"device_ids"`
@@ -199,8 +165,7 @@ func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Add application instances to devices
-	err = service.AddApplicationsToDevices(meberID, requestBody.AppID, requestBody.DeviceIDs)
+	err = service.AddApplicationsToDevices(ctx, clientset, meberID, requestBody.AppID, requestBody.DeviceIDs)
 	if err != nil {
 		http.Error(w, "Error adding applications to devices", http.StatusInternalServerError)
 		return
@@ -211,14 +176,12 @@ func AddApplicationsToDevicesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogsHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Extract query parameters (e.g., device ID, appInstanceID, date range, etc.)
 	queryParams := r.URL.Query()
 	deviceIDStr := queryParams.Get("device_id")
 	appInstanceIDStr := queryParams.Get("app_instance_id")
 	startDateStr := queryParams.Get("start_date")
 	endDateStr := queryParams.Get("end_date")
 
-	// Ensure at least one required query parameter is provided
 	if deviceIDStr == "" && appInstanceIDStr == "" {
 		http.Error(w, "Missing required query parameters: device_id or app_instance_id", http.StatusBadRequest)
 		return
@@ -227,7 +190,6 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	var deviceID, appInstanceID int64
 	var err error
 
-	// Validate and parse the device ID if provided
 	if deviceIDStr != "" {
 		deviceID, err = strconv.ParseInt(deviceIDStr, 10, 64)
 		if err != nil {
@@ -236,7 +198,6 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate and parse the appInstanceID if provided
 	if appInstanceIDStr != "" {
 		appInstanceID, err = strconv.ParseInt(appInstanceIDStr, 10, 64)
 		if err != nil {
@@ -245,7 +206,6 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate and parse the start date and end date if provided
 	var startDate, endDate *time.Time
 	if startDateStr != "" {
 		startDateParsed, err := time.Parse("2006-01-02", startDateStr)
@@ -265,14 +225,12 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		endDate = &endDateParsed
 	}
 
-	// Step 2: Call the service to get the logs based on query parameters
 	logs, err := service.GetLogs(deviceID, appInstanceID, startDate, endDate)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error retrieving logs: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Step 3: Respond with the logs in JSON format
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(logs)
