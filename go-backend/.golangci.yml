@@ -22,7 +22,7 @@ linters:
   enable:
     - govet       # Reports suspicious constructs (e.g., unreachable code, misused variables)
     - gofmt       # Ensures Go code is properly formatted (like `gofmt -s`)
-    - golint      # Enforces Go style guide (deprecated but still useful)
+    #- golint      # Enforces Go style guide (deprecated but still useful)
     - errcheck    # Ensures all errors are checked and handled
     - staticcheck # Detects bugs, optimizations, and unused code
     - gocyclo     # (Cyclomatic Complexity) For checking complexity within the code
