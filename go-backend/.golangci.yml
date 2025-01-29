@@ -33,8 +33,8 @@ linters:
 
 issues:
   exclude-use-default: false  # Use default exclude patterns (set to true if customizing)
-  max-issues-per-linter: 50   # Limits the number of reported issues per linter
-  max-same-issues: 3          # Prevents spam by limiting duplicate issues
+  max-issues-per-linter: 0   # Limits the number of reported issues per linter
+  max-same-issues: 5          # Prevents spam by limiting duplicate issues
 
 output:
   format: colored-line-number  # Makes output more readable in the terminal
