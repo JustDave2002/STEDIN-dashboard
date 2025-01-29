@@ -27,9 +27,16 @@ const (
 var municipalities []string
 
 func main() {
-	err := godotenv.Load()
+	envFile := ".env.development" // Default for local development
+
+	// Check if running in Docker (using an environment variable set in Dockerfile)
+	if os.Getenv("APP_ENV") == "docker" {
+		envFile = ".env.docker"
+	}
+
+	err := godotenv.Load(envFile)
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("Error loading .env.development file")
 	}
 
 	dbUser := os.Getenv("DB_USER")

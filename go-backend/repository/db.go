@@ -13,14 +13,21 @@ import (
 var DB *sql.DB
 
 func InitDB(relativePath string) {
-	envPath := ".env"
-	if relativePath != "" {
-		envPath = relativePath
+	envFile := ".env.development" // Default for local development
+
+	// Check if running in Docker (using an environment variable set in Dockerfile)
+	if os.Getenv("APP_ENV") == "docker" {
+		envFile = ".env.docker"
 	}
 
-	err := godotenv.Load(envPath)
+	// Allow overriding with a function argument
+	if relativePath != "" {
+		envFile = relativePath
+	}
+
+	err := godotenv.Load(envFile)
 	if err != nil {
-		log.Fatalf("Error loading .env file from path '%s': %v", envPath, err)
+		log.Fatalf("Error loading .env.development file from path '%s': %v", envFile, err)
 	}
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("MYSQL_ROOT_PASSWORD")

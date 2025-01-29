@@ -9,6 +9,7 @@ import (
 	"main/presentation"
 	"main/repository"
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -32,8 +33,17 @@ func main() {
 
 	handler := c.Handler(router)
 
-	log.Println("Starting server on :8000")
-	if err := http.ListenAndServe(":8000", handler); err != nil {
-		log.Fatalf("Error starting server: %v", err)
+	// Check if running in Docker (using an environment variable set in Dockerfile)
+	if os.Getenv("APP_ENV") == "docker" {
+		log.Println("Starting server on :8080")
+		if err := http.ListenAndServe(":8080", handler); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	} else {
+		log.Println("Starting server on :8000")
+		if err := http.ListenAndServe(":8000", handler); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+
 	}
 }
