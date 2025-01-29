@@ -11,6 +11,8 @@ import {getDeviceData, getEligibleDevices} from "@/app/api/route";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {Checkbox} from "@/components/ui/checkbox";
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export default function DevicePage() {
   const [isInstallMode, setIsInstallMode] = useState(false);
   const [appId, setAppId] = useState(null);
@@ -201,7 +203,7 @@ export default function DevicePage() {
   const handleInstall = async () => {
     try {
       const token = localStorage.getItem("token");
-      await fetch("http://localhost:8000/add-applications", {
+      await fetch(`${backendUrl}/add-applications`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

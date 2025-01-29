@@ -1,10 +1,12 @@
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export const getMapData = async () => {
     try {
         // Retrieve the JWT token from localStorage
         const token = localStorage.getItem('token');
 
         // Add the Authorization header with the Bearer token
-        const response = await fetch("http://localhost:8000/map", {
+        const response = await fetch(`${backendUrl}/map`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -27,7 +29,7 @@ export const getDeviceData = async () => {
         const token = localStorage.getItem('token');
 
         // Add the Authorization header with the Bearer token
-        const response = await fetch("http://localhost:8000/devices", {
+        const response = await fetch(`${backendUrl}/devices`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -47,7 +49,7 @@ export const getDeviceData = async () => {
 export const getEligibleDevices = async (appId) => {
     try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:8000/eligible-devices", {
+        const response = await fetch(`${backendUrl}/eligible-devices`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

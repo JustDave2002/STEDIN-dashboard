@@ -7,6 +7,8 @@ import { X, ArrowUp, ArrowDown } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow } from 'date-fns';
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export default function DeviceTable({ devices, isInstallMode, onDeviceToggle, selectedDevices  }) {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -116,7 +118,7 @@ export default function DeviceTable({ devices, isInstallMode, onDeviceToggle, se
   const fetchDeviceLogs = async (deviceId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/logs?device_id=${deviceId}`, {
+      const response = await fetch(`${backendUrl}/logs?device_id=${deviceId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -136,7 +138,7 @@ export default function DeviceTable({ devices, isInstallMode, onDeviceToggle, se
   const fetchAppInstanceLogs = async (appInstanceId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/logs?app_instance_id=${appInstanceId}`, {
+      const response = await fetch(`${backendUrl}/logs?app_instance_id=${appInstanceId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`

@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Home, Map, Laptop, Layout, FileText, Users, Settings } from "lucide-react"
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export default function Navigation() {
   const [mebers, setMebers] = useState([])
   const [currentMeber, setCurrentMeber] = useState(null)
@@ -22,7 +24,7 @@ export default function Navigation() {
     // Fetch mebers from the backend
     const fetchMebers = async () => {
       try {
-        const response = await fetch('http://localhost:8000/mebers') // Fetch mebers from backend
+        const response = await fetch(`${backendUrl}/mebers`) // Fetch mebers from backend
         if (!response.ok) {
           throw new Error('Failed to fetch mebers')
         }
@@ -52,7 +54,7 @@ export default function Navigation() {
       setCurrentMeber(selectedMeber)
       try {
         // Send login request to backend to get JWT
-        const response = await fetch('http://localhost:8000/api/login', {
+        const response = await fetch(`${backendUrl}/api/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -98,24 +100,6 @@ export default function Navigation() {
             <Button variant="ghost" className="flex items-center" as="a">
               <Laptop className="mr-2 h-4 w-4" />
               Devices
-            </Button>
-          </Link>
-          <Link href="/applications" passHref legacyBehavior>
-            <Button variant="ghost" className="flex items-center" as="a">
-              <Layout className="mr-2 h-4 w-4" />
-              Applications
-            </Button>
-          </Link>
-          <Link href="/logs" passHref legacyBehavior>
-            <Button variant="ghost" className="flex items-center" as="a">
-              <FileText className="mr-2 h-4 w-4" />
-              Logs
-            </Button>
-          </Link>
-          <Link href="/users" passHref legacyBehavior>
-            <Button variant="ghost" className="flex items-center" as="a">
-              <Users className="mr-2 h-4 w-4" />
-              Users
             </Button>
           </Link>
           <Link href="/appstore" passHref legacyBehavior>

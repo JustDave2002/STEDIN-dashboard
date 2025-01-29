@@ -5,6 +5,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
+import {getEligibleDevices} from "@/app/api/route";
+
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function InstallApplication({ app, onClose }) {
     const [step, setStep] = useState(1)
@@ -17,30 +20,19 @@ export default function InstallApplication({ app, onClose }) {
 
     useEffect(() => {
         const fetchEligibleDevices = async () => {
+            setIsLoading(true);
             try {
-                const token = localStorage.getItem('token')
-                const response = await fetch('http://localhost:8000/eligible-devices', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ application_id: app.id })
-                })
-                if (!response.ok) {
-                    throw new Error('Failed to fetch eligible devices')
-                }
-                const data = await response.json()
-                setEligibleDevices(data)
+                const data = await getEligibleDevices(app.id);
+                setEligibleDevices(data);
             } catch (error) {
-                console.error('Error fetching eligible devices:', error)
+                console.error('Error fetching eligible devices:', error);
             } finally {
-                setIsLoading(false)
+                setIsLoading(false);
             }
-        }
+        };
 
-        fetchEligibleDevices()
-    }, [app.id])
+        fetchEligibleDevices();
+    }, [app.id]);
 
     const handleDeviceToggle = (deviceId) => {
         setSelectedDevices(prev =>
@@ -155,7 +147,7 @@ export default function InstallApplication({ app, onClose }) {
         setIsInstalling(true)
         try {
             const token = localStorage.getItem('token')
-            const response = await fetch('http://localhost:8000/add-applications', {
+            const response = await fetch(`${backendUrl}/add-applications`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

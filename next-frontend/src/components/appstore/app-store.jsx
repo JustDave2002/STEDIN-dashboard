@@ -15,6 +15,8 @@ import AppList from './app-list'
 import AppDetail from './app-detail'
 import InstallApplication from './install-application'
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export default function AppStore() {
     const [apps, setApps] = useState([])
     const [selectedApp, setSelectedApp] = useState(null)
@@ -26,7 +28,7 @@ export default function AppStore() {
     useEffect(() => {
         const fetchApps = async () => {
             try {
-                const response = await fetch('http://localhost:8000/appstore')
+                const response = await fetch(`${backendUrl}/appstore`)
                 if (!response.ok) {
                     throw new Error('Failed to fetch apps')
                 }
