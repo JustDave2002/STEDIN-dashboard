@@ -106,7 +106,7 @@ jobs:
 
   build:
     needs: test  # This job runs only if the `test` job succeeds
-    if: github.ref == 'refs/heads/main'  # Ensure this runs only on the `main` branch
+#    if: github.ref == 'refs/heads/main'  # Ensure this runs only on the `main` branch
     runs-on: ubuntu-latest
 
     steps:
