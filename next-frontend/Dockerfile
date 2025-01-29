@@ -17,4 +17,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Start Next.js app
-CMD ["npm", "run", "start"]
+CMD ["npm", "run", "start", "--", "-p", "3000"]

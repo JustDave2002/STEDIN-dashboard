@@ -50,15 +50,8 @@ jobs:
           echo "DB_HOST=${{ secrets.DB_HOST }}" >> ./go-backend/.env
           echo "DB_PORT=${{ secrets.DB_PORT }}" >> ./go-backend/.env
 
-          # Debugging: Show env contents
-          echo "DB Seeder env file:"
-          cat ./DB_seeding/.env
-          echo "Go Backend env file:"
-          cat ./go-backend/.env
-
-
       # Step 5: Start Docker Compose and DB
-      - name: Start Docker Compose
+      - name: Starting DB Container
         working-directory: ./DB_seeding
         run: docker-compose up -d
 
@@ -121,82 +114,72 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      #      login to docker
+      - name: Login to GitHub Container Registry
+        run: echo "${{secrets.GHCR_TOKEN}}" | docker login ghcr.io -u justdave2002 --password-stdin
+
+
       # Step 2: Set up environment variables for the backend and DB seeding
       - name: Set up environment variables
         run: |
           # Ensure empty .env files exist for both backend and DB seeding
+          touch ./DB_seeding/.env.docker
           touch ./DB_seeding/.env
+          touch ./go-backend/.env.docker
           touch ./go-backend/.env
-          
+          touch ./next-frontend/.env.docker
+
           # Populate .env files for DB seeding
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> ./DB_seeding/.env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> ./DB_seeding/.env
-          echo "DB_USER=${{ secrets.DB_USER }}" >> ./DB_seeding/.env
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> ./DB_seeding/.env
-          echo "DB_PORT=${{ secrets.DB_PORT }}" >> ./DB_seeding/.env
-          
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.PROD_MYSQL_ROOT_PASSWORD }}" >> ./DB_seeding/.env.docker
+          echo "MYSQL_DATABASE=${{ secrets.PROD_MYSQL_DATABASE }}" >> ./DB_seeding/.env.docker
+          echo "DB_USER=${{ secrets.PROD_DB_USER }}" >> ./DB_seeding/.env.docker
+          echo "DB_HOST=${{ secrets.PROD_DB_HOST }}" >> ./DB_seeding/.env.docker
+          echo "DB_PORT=${{ secrets.PROD_DB_PORT }}" >> ./DB_seeding/.env.docker
+
           # Populate .env files for Go Backend
-          echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> ./go-backend/.env
-          echo "MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}" >> ./go-backend/.env
-          echo "DB_USER=${{ secrets.DB_USER }}" >> ./go-backend/.env
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> ./go-backend/.env
-          echo "DB_PORT=${{ secrets.DB_PORT }}" >> ./go-backend/.env
+          echo "MYSQL_ROOT_PASSWORD=${{ secrets.PROD_MYSQL_ROOT_PASSWORD }}" >> ./go-backend/.env.docker
+          echo "MYSQL_DATABASE=${{ secrets.PROD_MYSQL_DATABASE }}" >> ./go-backend/.env.docker
+          echo "DB_USER=${{ secrets.PROD_DB_USER }}" >> ./go-backend/.env.docker
+          echo "DB_HOST=${{ secrets.PROD_DB_HOST }}" >> ./go-backend/.env.docker
+          echo "DB_PORT=${{ secrets.PROD_DB_PORT }}" >> ./go-backend/.env.docker
 
-      # Step 3: Set up Node.js and install frontend dependencies (Next.js frontend)
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+          # Populate .env.docker for Frontend
+          echo "NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL }}" >> ./next-frontend/.env.docker
 
-      - name: Install frontend dependencies
-        working-directory: ./next-frontend  # Use the correct frontend directory name
-        run: npm install
-
-      # Step 4: Build frontend for production (Next.js)
-      - name: Build frontend
-        working-directory: ./next-frontend
-        run: npm run build
-
-      # Step 5: Build the backend container
-      - name: Build backend Docker image
+      - name: Install Docker Compose
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/myapp-backend:latest ./go-backend
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
 
-      # Step 6: Start MariaDB container and seed the DB in the production environment
-      - name: Start MariaDB container
+      - name: Build Docker Images
         run: |
-          docker-compose -f docker-compose.yml up -d mariadb  # Start only the MariaDB container
+          docker-compose -f docker-compose.prod.yml build
 
-      # Step 7: Wait for the database to be ready
-      - name: Wait for MariaDB to be ready
-        run: |
-          source ./DB_seeding/.env
-          for i in {1..20}; do
-            echo "Attempt $i..."
-            docker exec mariadb mariadb-admin ping -u root --password="$MYSQL_ROOT_PASSWORD" --host=0.0.0.0 && break
-            echo "Waiting for database to be ready..."
-            sleep 5
-          done
+      - name: Push Docker Images to GHCR
+        run:  |
+          docker tag backend ghcr.io/justdave2002/backend:latest
+          docker tag frontend ghcr.io/justdave2002/frontend:latest
+          docker tag seeder ghcr.io/justdave2002/seeder:latest
+          docker push ghcr.io/justdave2002/backend:latest
+          docker push ghcr.io/justdave2002/frontend:latest
+          docker push ghcr.io/justdave2002/seeder:latest
 
-      # Step 8: Seed the database in the running MariaDB container
-      - name: Seed the database
-        working-directory: ./DB_seeding
-        run: go run .
 
-      # Step 9: Build and push the backend Docker image
-      - name: Push backend Docker image
-        run: |
-          docker push ghcr.io/${{ github.repository_owner }}/myapp-backend:latest
 
-      # Step 10: Build and push the frontend Docker image
-      - name: Build and push frontend Docker image
-        run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/myapp-frontend:latest ./next-frontend
-          docker push ghcr.io/${{ github.repository_owner }}/myapp-frontend:latest
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    container: ghcr.io/railwayapp/cli:latest
 
-      # Step 11: Optionally, deploy the containers after the build (conditional on `main` branch)
-      - name: Deploy to production
-        if: github.ref == 'refs/heads/main'
-        run: |
-          echo "Deploying to production environment..."
-          # Your deployment logic here (e.g., pushing to Railway, Kubernetes, etc.)
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Deploy Backend
+        run: railway redeploy --service=32886956-b583-45b8-92a0-b1fd65bb51ea --yes
+
+      - name: Deploy Frontend
+        run: railway redeploy --service=4596c9fe-54e4-4d34-9b79-fb549beabdc2 --yes
+
+      - name: Deploy Seeder (Run Once)
+        run: railway redeploy --service=5b41c7c7-145b-4468-b3dc-eda0cd47578d --yes

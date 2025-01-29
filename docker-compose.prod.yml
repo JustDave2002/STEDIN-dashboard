@@ -1,28 +1,35 @@
-version: '3.8'
-services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
+version: '3.9'
 
+services:
   backend:
-    build: ./go-backend
+    build:
+      context: ./go-backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./go-backend/.env.docker
     ports:
       - "8080:8080"
-    environment:
-      - MYSQL_HOST=mariadb
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=MooiWachtwoord1!
-      - MYSQL_DATABASE=edge_management
-    depends_on:
-      - mariadb
+    image: backend:latest  # <-- Explicit image name
 
-  mariadb:
-    image: mariadb:10.5
-    environment:
-      - MYSQL_ROOT_PASSWORD=MooiWachtwoord1!
-      - MYSQL_DATABASE=edge_management
+
+  frontend:
+    build:
+      context: ./next-frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
     ports:
-      - "3306:3306"
+      - "3000:3000"
+    image: frontend:latest  # <-- Explicit image name
+
+  #    environment:
+#      - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
+
+  seeder:
+    build:
+      context: ./DB_seeding
+      dockerfile: Dockerfile
+    env_file:
+      - ./DB_seeding/.env.docker
+    command: ["go", "run", "main.go"]
+    image: seeder:latest  # <-- Explicit image name

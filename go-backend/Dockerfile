@@ -10,6 +10,9 @@ RUN go mod download
 # Copy the application code
 COPY . .
 
+# Set APP_ENV to docker (to auto-select .env.docker in the code)
+ENV APP_ENV=docker
+
 # Build the Go application
 RUN go build -o myapp
 

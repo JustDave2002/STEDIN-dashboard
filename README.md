@@ -14,11 +14,12 @@ The STEDIN Dashboard is a comprehensive PoC, which is a web application designed
 
 - **Frontend**: Next.js (React framework) for a responsive and dynamic user interface.
 - **Backend**: Go (Golang) for a robust and efficient server-side application.
-- **Database**: PostgreSQL for reliable data storage and management.
+- **Database**: MariaDB for reliable data storage and management.
 - **Styling**: shadcn/ui (using Tailwind CSS) for modern and maintainable design.
+- **Containerisation**: Docker for easy install and testing of the application.
 
 ## Installation
-
+There are two options for installing the application, either run `docker-compose up --build` or go through the following steps:
 1. **Clone the Repository**:
    ```bash
    git clone https://github.com/JustDave2002/STEDIN-dashboard.git
@@ -56,8 +57,8 @@ The STEDIN Dashboard is a comprehensive PoC, which is a web application designed
      ```
 
 4. **Database Setup**:
-   - Ensure PostgreSQL is installed and running.
-   - Create a new database for the application.
+   - navigate to the DB_seeding dir
+   - use `docker-compose up -d` for the mariaDB container
    - Apply database migrations located in the `DB_seeding` directory.
 
 ## Usage
