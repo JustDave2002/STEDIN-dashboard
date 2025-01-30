@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="NextJS workflow test" type="ShConfigurationType">
-    <option name="SCRIPT_TEXT" value="act -P ubuntu-latest -W .github/workflows/next_frontend.yml" />
+  <configuration default="false" name="React workflow test" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="act -P ubuntu-latest -W .github/workflows/react_frontend.yml" />
     <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
     <option name="SCRIPT_PATH" value="" />
     <option name="SCRIPT_OPTIONS" value="" />

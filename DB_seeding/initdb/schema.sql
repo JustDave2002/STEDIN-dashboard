@@ -128,7 +128,7 @@ CREATE TABLE
 CREATE TABLE
     logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    device_id INT NOT NULL,
+    device_id INT,
     app_instance_id INT NULL,
     description TEXT NOT NULL,
     warning_level ENUM('online', 'offline', 'error', 'app_issue', 'warning') NOT NULL,
