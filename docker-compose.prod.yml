@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./go-backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./go-backend/.env.docker
+    ports:
+      - "8080:8080"
+    image: backend:latest  # <-- Explicit image name
+
+
+  frontend:
+    build:
+      context: ./next-frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    image: frontend:latest  # <-- Explicit image name
+
+  #    environment:
+#      - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
+
+  seeder:
+    build:
+      context: ./DB_seeding
+      dockerfile: Dockerfile
+    env_file:
+      - ./DB_seeding/.env.docker
+    command: ["go", "run", "main.go"]
+    image: seeder:latest  # <-- Explicit image name

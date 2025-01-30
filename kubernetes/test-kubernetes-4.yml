@@ -1,0 +1,355 @@
+- hosts: master
+  become: true
+  vars:
+    wsl_ip: "{{ ansible_default_ipv4.address }}"
+    project_dir: "{{ playbook_dir }}"  # Playbook's directory as the project directory
+    kube_ports:
+      - 6443  # API server port
+      - 2379  # etcd server client API
+      - 2380  # etcd server peer API
+      - 10250 # kubelet API
+      - 10251 # kube-scheduler
+      - 10252 # kube-controller-manager
+
+  tasks:
+    - name: Check if running in WSL
+      command: grep -qi 'microsoft' /proc/version
+      register: wsl_check
+      ignore_errors: true
+
+    - name: Set is_wsl fact based on WSL check
+      set_fact:
+        is_wsl: "{{ wsl_check.rc == 0 }}"
+
+    - name: Check if kubeadm is installed
+      command: which kubeadm
+      register: kubeadm_installed
+      ignore_errors: true
+
+    - name: Generate PowerShell script for setting up port forwarding (if in WSL)
+      copy:
+        dest: "{{ project_dir }}/setup_port_forwarding.ps1"
+        content: |
+          # PowerShell Script to Set Up Port Forwarding in WSL
+          # Run this script in an elevated PowerShell session
+          {% for port in kube_ports %}
+          netsh interface portproxy add v4tov4 listenport={{ port }} listenaddress=0.0.0.0 connectport={{ port }} connectaddress={{ wsl_ip }}
+          {% endfor %}
+        mode: '0755'
+      when: is_wsl
+
+    - name: Display instructions to run the PowerShell setup script
+      debug:
+        msg: |
+          Since this environment is detected as WSL, please run the following PowerShell script on your Windows host with Administrator privileges to set up port forwarding:
+          
+          ```powershell
+          powershell.exe -File {{ project_dir }}\setup_port_forwarding.ps1
+          ```
+
+    - name: Pause for user confirmation
+      pause:
+        prompt: "
+        Please confirm that you've run the PowerShell setup script to set up port forwarding.
+        
+        Temporarily enable running scripts by running:
+        
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+        
+        Press Enter to continue"
+      when: is_wsl
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+          - iptables
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap temporarily
+      command: swapoff -a
+
+    - name: Temporarily enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: no
+
+    - name: Set up temporary iptables rules for Kubernetes ports
+      shell: |
+        {% for port in kube_ports %}
+        iptables -A INPUT -p tcp --dport {{ port }} -j ACCEPT
+        {% endfor %}
+      args:
+        executable: /bin/bash
+
+    - name: Ensure the directory /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes apt key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+        dest: /tmp/Release.key
+
+    - name: Add Kubernetes apt key to keyring
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet, kubeadm, and kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Hold kubelet, kubeadm, and kubectl at the current version
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    - name: Unmount /var/lib/kubelet if mounted
+      shell: |
+        if mountpoint -q /var/lib/kubelet; then
+          fuser -k /var/lib/kubelet || true
+          umount /var/lib/kubelet || true
+        fi
+      register: unmount_kubelet
+      ignore_errors: true
+
+    - name: Debug unmount result if failed
+      debug:
+        var: unmount_kubelet
+      when: unmount_kubelet.failed
+
+    - name: Stop kubelet service if installed
+      service:
+        name: kubelet
+        state: stopped
+      when: kubeadm_installed.rc == 0
+
+    - name: Reset Kubernetes cluster if already initialized
+      command: kubeadm reset -f
+      when: kubeadm_installed.rc == 0
+      ignore_errors: true
+
+    - name: Clean up Kubernetes directories after reset
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+        - /etc/cni/net.d
+      when: kubeadm_installed.rc == 0
+      retries: 2              # Number of attempts
+      delay: 2                # Delay (in seconds) between each attempt
+      register: cleanup_result
+      until: cleanup_result is succeeded
+
+    - name: Start kubelet service again
+      service:
+        name: kubelet
+        state: started
+      when: kubeadm_installed.rc == 0
+
+    - name: Run kubeadm init (Control Plane Initialization)
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --service-cidr=10.96.0.0/12
+      register: kubeadm_output
+      ignore_errors: true  # Ignore if the cluster is already initialized
+
+    - name: Retrieve public IP of the host (only if in WSL)
+      command: "curl -s ifconfig.me"
+      register: public_ip
+      when: is_wsl
+      changed_when: false
+
+    - name: Modify admin.conf with public IP if WSL, else copy directly to .kube/config
+      block:
+        - name: Replace WSL IP with public IP in original admin.conf (if WSL)
+          lineinfile:
+            path: "/etc/kubernetes/admin.conf"
+            regexp: '^(\s*server:\s)(https://{{ wsl_ip }})$'
+            line: '    server: https://{{ public_ip.stdout }}'
+          when: is_wsl
+
+        - name: Ensure .kube directory exists for specified user
+          file:
+            path: "/home/{{ kube_user }}/.kube"
+            state: directory
+            mode: '0755'
+            owner: "{{ kube_user }}"
+            group: "{{ kube_user }}"
+
+        - name: Copy (modified) Kubernetes admin.conf to user's kube config
+          copy:
+            src: /etc/kubernetes/admin.conf
+            dest: "/home/{{ kube_user }}/.kube/config"
+            remote_src: yes
+            owner: "{{ kube_user }}"
+            group: "{{ kube_user }}"
+
+      when: kubeadm_output.changed
+
+    - name: Install Calico network plugin
+      become: yes
+      become_user: "{{ kube_user }}"
+      shell: |
+        kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+      when: kubeadm_output.changed  # Only if 'kubeadm init' ran successfully
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+      when: kubeadm_output.changed
+
+    - name: Modify join command to use public IP (only if in WSL)
+      set_fact:
+        final_join_command: "{{ join_command.stdout | regex_replace(wsl_ip, public_ip.stdout) }}"
+      when: is_wsl and join_command is defined and public_ip is defined
+
+    - name: Set join command to unmodified value (for native Linux)
+      set_fact:
+        final_join_command: "{{ join_command.stdout }}"
+      when: not is_wsl and join_command is defined
+
+    - name: Save the join command to a shared file
+      copy:
+        content: "{{ final_join_command }}"
+        dest: /tmp/kube_join_command.txt
+      when: final_join_command is defined
+
+    - name: Distribute join configuration to worker nodes
+      copy:
+        src: /tmp/kube_join_command.txt
+        dest: /tmp/kube_join_command.txt
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['worker'] }}"
+      become: true
+
+    - name: Distribute modified admin.conf to worker nodes for kubelet access
+      copy:
+        src: "/home/{{ kube_user }}/.kube/config"
+        dest: /tmp/admin.conf
+        remote_src: yes
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['worker'] }}"
+      become: true
+
+- hosts: worker
+  become: true
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisites on worker nodes
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap temporarily on worker nodes
+      command: swapoff -a
+
+    - name: Add Kubernetes apt key on worker nodes
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository on worker nodes
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo on worker nodes
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet and kubeadm on worker nodes
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+        state: present
+
+    - name: Hold kubelet and kubeadm at the current version
+      command: apt-mark hold kubelet kubeadm
+
+    - name: Check if node is already part of a Kubernetes cluster
+      command: kubeadm token list
+      register: token_check
+      failed_when: token_check.rc !=0 and token_check.rc !=1
+      changed_when: false
+
+    - name: Reset kubeadm on worker node if it is already part of a cluster
+      command: kubeadm reset -f
+      when: token_check.rc == 0 # Only reset if kubeadm token list succeeds
+      ignore_errors: true # In case the reset partially fails
+
+    - name: Clean up Kubernetes directories after reset
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+        - /etc/cni/net.d
+      when: token_check.rc == 0 # Clean up only if node was part of a cluster
+
+    - name: Ensure /etc/kubernetes directory exists
+      file:
+        path: /etc/kubernetes
+        state: directory
+        mode: '0755'
+
+    - name: Move admin.conf to /etc/kubernetes directory
+      copy:
+        src: /tmp/admin.conf
+        dest: /etc/kubernetes/admin.conf
+        remote_src: yes
+        mode: '0644'
+
+    - name: Join worker node to Kubernetes cluster using shared join command
+      command: "{{ lookup('file', '/tmp/kube_join_command.txt') }}"
+      when: ansible_facts['os_family'] == 'Debian'
+

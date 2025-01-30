@@ -1,7 +1,10 @@
+version: '3.9'
 services:
   mariadb:
     image: mariadb:latest
-    container_name: mariadb_backend
+    container_name: mariadb
+    env_file:
+      - .env
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}

@@ -1,0 +1,510 @@
+- name: Setup Kubernetes Cluster
+  become: true
+  hosts: master
+  gather_facts: yes
+  vars:
+    kube_ports:
+      - 6443  # API server port
+      - 2379  # etcd server client API
+      - 2380  # etcd server peer API
+      - 10250 # kubelet API
+      - 10251 # kube-scheduler
+      - 10252 # kube-controller-manager
+    frp_version: "0.61.0"
+    frp_port: 7000
+  tasks:
+
+    ############################################################
+    # Conditional checking for WSL presence & Fetching the correct host IP.
+    # This is to support both native and non-native Debian distributions.
+    ############################################################
+#    - name: Check if running in WSL
+#      command: grep -qi 'microsoft' /proc/version
+#      register: wsl_check
+#      changed_when: false
+#      ignore_errors: true
+#
+#    - name: Set is_wsl fact based on WSL check
+#      set_fact:
+#        is_wsl: "{{ wsl_check.rc == 0 }}"
+
+    - name: Retrieve Windows host IP (global IP)
+      command: "curl -s ifconfig.me"
+      register: global_ip
+      changed_when: false
+
+    - name: Set global IP as host_ip
+      set_fact:
+        host_ip: "{{ global_ip.stdout }}"
+
+#    - name: Log the host IP being used
+#      debug:
+#        msg: "Detected host IP of the environment: {{ host_ip }}"
+
+#    - name: Generate PowerShell script for setting up port forwarding (if in WSL)
+#      copy:
+#        dest: "{{ playbook_dir }}/setup_port_forwarding.ps1"
+#        content: |
+#          # PowerShell Script to Set Up Port Forwarding in WSL
+#          # Run this script in an elevated PowerShell session
+#          {% for port in kube_ports %}
+#          netsh interface portproxy add v4tov4 listenport={{ port }} listenaddress=0.0.0.0 connectport={{ port }} connectaddress={{ global_ip }}
+#          {% endfor %}
+#        mode: '0755'
+#      when: is_wsl
+#
+#    - name: Generate PowerShell script for removing port forwarding (if in WSL)
+#      copy:
+#        dest: "{{ playbook_dir }}/remove_port_forwarding.ps1"
+#        content: |
+#          # PowerShell Script to Remove Port Forwarding in WSL
+#          # Run this script in an elevated PowerShell session
+#          {% for port in kube_ports %}
+#          netsh interface portproxy delete v4tov4 listenport={{ port }} listenaddress=0.0.0.0
+#          {% endfor %}
+#        mode: '0755'
+#      when: is_wsl
+#
+#    - name: Pause for user confirmation
+#      pause:
+#        prompt: "\n⚠️ Please confirm that you've run the PowerShell setup script to set up port forwarding.⚠️
+#        \n\nTemporarily enable running scripts by running the following in an elevated Powershell terminal:
+#        \nSet-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+#        \n\nPress Enter to continue"
+#      when: is_wsl
+
+    ############################################################
+    # Standard setup.
+    # Deals with basic packages and dependencies.
+    ############################################################
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+          - iptables
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Enable IP forwarding
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: no
+
+    ############################################################
+    # Kubernetes setup.
+    # Retrieves dependencies, installs & configures.
+    ############################################################
+    - name: Set up iptables rules for Kubernetes ports
+      shell: |
+        {% for port in kube_ports %}
+        iptables -A INPUT -p tcp --dport {{ port }} -j ACCEPT
+        {% endfor %}
+      args:
+        executable: /bin/bash
+
+    - name: Ensure the directory /etc/apt/keyrings exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes apt key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key
+        dest: /tmp/Release.key
+
+    - name: Add Kubernetes apt key to keyring
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet, kubeadm, and kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+
+    - name: Hold kubelet, kubeadm, and kubectl at the current version
+      command: apt-mark hold kubelet kubeadm kubectl
+
+    ############################################################
+    # Remove previous Kubernetes config.
+    # This is to guarantee a clean slate each time.
+    ############################################################
+    - name: Check if kubeadm is installed
+      command: which kubeadm
+      register: kubeadm_installed
+      ignore_errors: true
+
+    # Gotta be fixed, Ansible itself is mounted
+    - name: Unmount /var/lib/kubelet if mounted
+      shell: |
+        if mountpoint -q /var/lib/kubelet; then
+          fuser -k /var/lib/kubelet || true
+          umount /var/lib/kubelet || true
+        fi
+      register: unmount_kubelet
+      ignore_errors: true
+
+    - name: Stop kubelet service if installed
+      service:
+        name: kubelet
+        state: stopped
+      when: kubeadm_installed.rc == 0
+
+    - name: Reset Kubernetes cluster if already initialized
+      command: kubeadm reset -f
+      when: kubeadm_installed.rc == 0
+      ignore_errors: true
+
+    - name: Clean up Kubernetes directories after reset
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+        - /etc/cni/net.d
+      when: kubeadm_installed.rc == 0
+      retries: 2              # Number of attempts
+      delay: 2                # Delay (in seconds) between each attempt
+      register: cleanup_result
+      until: cleanup_result is succeeded
+
+    - name: Start kubelet service again
+      service:
+        name: kubelet
+        state: started
+      when: kubeadm_installed.rc == 0
+
+    ############################################################
+    # Fast Reverse Proxy (FRP) Peer-to-peer (P2P) tunnel.
+    ############################################################
+    - name: Get system architecture using uname
+      command: uname -m
+      register: arch_result
+
+    - name: Set frp architecture based on uname output
+      set_fact:
+        frp_architecture: "{{ 'amd64' if arch_result.stdout.strip() == 'x86_64' else 'arm64' if arch_result.stdout.strip() == 'aarch64' else 'arm' if arch_result.stdout.strip() == 'armv7l' else 'unknown' }}"
+
+    - name: Fail if architecture is unsupported
+      fail:
+        msg: "The architecture {{ arch_result.stdout }} is not supported by this playbook."
+      when: frp_architecture == 'unknown'
+
+    - name: Set frp download URL
+      set_fact:
+        frp_url: "https://github.com/fatedier/frp/releases/download/v{{ frp_version }}/frp_{{ frp_version }}_linux_{{ frp_architecture }}.tar.gz"
+
+    - name: Download frp server package
+      get_url:
+        url: "{{ frp_url }}"
+        dest: "/tmp/frp.tar.gz"
+
+    - name: Extract frp server package
+      unarchive:
+        src: "/tmp/frp.tar.gz"
+        dest: "/opt"
+        remote_src: yes
+        creates: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}"
+
+    - name: Configure frp server
+      copy:
+        dest: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frps.ini"
+        content: |
+          [common]
+          bind_port = {{ frp_port }}
+
+    - name: Create systemd service file for frp server
+      copy:
+        dest: /etc/systemd/system/frps.service
+        content: |
+          [Unit]
+          Description=frp server
+          After=network.target
+
+          [Service]
+          ExecStart=/opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frps -c /opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frps.ini
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Reload systemd to recognize frp server service
+      command: systemctl daemon-reload
+
+    - name: Start and enable frp server
+      service:
+        name: frps
+        state: started
+        enabled: true
+
+    ############################################################
+    # Kubernetes cluster initialization.
+    ############################################################
+    - name: Run kubeadm init (Control Plane Initialization)
+      command: kubeadm init
+      register: kubeadm_output
+
+    - name: Ensure .kube directory exists for specified user
+      file:
+        path: "/home/{{ kube_user }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ kube_user }}"
+        group: "{{ kube_user }}"
+
+    - name: Copy Kubernetes admin.conf to user's kube config with root privileges
+      become: yes
+      become_user: root
+      command: cp /etc/kubernetes/admin.conf /home/{{ kube_user }}/.kube/config
+
+    - name: Set ownership for Kubernetes config file
+      become: yes
+      become_user: root
+      file:
+        path: "/home/{{ kube_user }}/.kube/config"
+        owner: "{{ kube_user }}"
+        group: "{{ kube_user }}"
+        mode: '0644'
+
+    - name: Retrieve kubeadm join command
+      shell: |
+        kubeadm token create --print-join-command
+      register: join_command
+      when: kubeadm_output.changed
+
+  ############################################################
+  # Worker setup
+  #
+  ############################################################
+- hosts: worker
+  become: true
+  vars:
+    kube_ports:
+      - 6443  # API server port
+      - 2379  # etcd server client API
+      - 2380  # etcd server peer API
+      - 10250 # kubelet API
+      - 10251 # kube-scheduler
+      - 10252 # kube-controller-manager
+    frp_version: "0.61.0"
+    frp_port: 7000
+    frp_server_ip: "{{ hostvars['master_node']['ansible_default_ipv4']['address'] }}"
+    kube_api_port: 6443  # Kubernetes API port
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisites on worker nodes
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+          - containerd
+        state: present
+
+    - name: Ensure containerd is started and enabled
+      service:
+        name: containerd
+        state: started
+        enabled: yes
+
+    - name: Disable swap temporarily on worker nodes
+      command: swapoff -a
+
+    - name: Add Kubernetes apt key on worker nodes
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/Release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Add Kubernetes apt repository on worker nodes
+      copy:
+        dest: /etc/apt/sources.list.d/kubernetes.list
+        content: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /"
+        mode: '0644'
+
+    - name: Update apt cache after adding Kubernetes repo on worker nodes
+      apt:
+        update_cache: yes
+
+    - name: Install kubelet and kubeadm on worker nodes
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+        state: present
+
+    - name: Hold kubelet and kubeadm at the current version
+      command: apt-mark hold kubelet kubeadm
+
+    - name: Check if node is already part of a Kubernetes cluster
+      command: kubeadm token list
+      register: token_check
+      failed_when: token_check.rc !=0 and token_check.rc !=1
+      changed_when: false
+
+    - name: Reset kubeadm on worker node if it is already part of a cluster
+      command: kubeadm reset -f
+      when: token_check.rc == 0 # Only reset if kubeadm token list succeeds
+      ignore_errors: true # In case the reset partially fails
+
+    - name: Clean up Kubernetes directories after reset
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /var/lib/kubelet
+        - /var/lib/etcd
+        - /var/lib/cni
+        - /etc/cni/net.d
+      when: token_check.rc == 0 # Clean up only if node was part of a cluster
+
+    - name: Ensure /etc/kubernetes directory exists
+      file:
+        path: /etc/kubernetes
+        state: directory
+        mode: '0755'
+
+    ############################################################
+    # Worker setup
+    # FRP
+    ############################################################
+
+- hosts: worker
+  become: true
+  vars:
+    frp_version: "0.61.0"  # Adjust this to the latest version if needed
+    frp_server_ip: "{{ hostvars['master_node']['ansible_default_ipv4']['address'] }}"  # IP of master node
+    kube_api_port: 6443  # Kubernetes API port
+    frp_port: 7000       # frp server port configured on the master node
+  tasks:
+
+    - name: Get system architecture using uname
+      command: uname -m
+      register: arch_result
+
+    - name: Set frp architecture based on uname output
+      set_fact:
+        frp_architecture: "{{ 'amd64' if arch_result.stdout.strip() == 'x86_64' else 'arm64' if arch_result.stdout.strip() == 'aarch64' else 'arm' if arch_result.stdout.strip() == 'armv7l' else 'unknown' }}"
+
+    - name: Fail if architecture is unsupported
+      fail:
+        msg: "The architecture {{ arch_result.stdout.strip() }} is not supported by this playbook."
+      when: frp_architecture == 'unknown'
+
+    - name: Set frp download URL
+      set_fact:
+        frp_url: "https://github.com/fatedier/frp/releases/download/v{{ frp_version }}/frp_{{ frp_version }}_linux_{{ frp_architecture }}.tar.gz"
+
+    - name: Debug architecture and URL
+      debug:
+        msg: "Architecture: {{ frp_architecture }}, URL: {{ frp_url }}"
+
+    - name: Clean up previous frp installation if it exists
+      file:
+        path: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture.strip() }}"
+        state: absent
+
+    - name: Download frp client package
+      get_url:
+        url: "{{ frp_url }}"
+        dest: "/tmp/frp.tar.gz"
+
+    - name: Ensure frp installation directory exists
+      file:
+        path: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture.strip() }}"
+        state: directory
+        mode: '0755'
+
+    - name: Extract frp client package
+      unarchive:
+        src: "/tmp/frp.tar.gz"
+        dest: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture.strip() }}"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+
+    - name: Configure frp client to tunnel Kubernetes API
+      copy:
+        dest: "/opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frpc.ini"
+        content: |
+          [common]
+          server_addr = {{ hostvars['master_node']['host_ip'] }}
+          server_port = {{ frp_port }}
+
+          [k8s_api]
+          type = tcp
+          local_ip = 127.0.0.1
+          local_port = {{ kube_api_port }}
+          remote_port = {{ kube_api_port }}
+
+    - name: Create systemd service file for frp client on worker nodes
+      copy:
+        dest: /etc/systemd/system/frpc.service
+        content: |
+          [Unit]
+          Description=frp client for Kubernetes API
+          After=network.target
+
+          [Service]
+          ExecStart=/opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frpc -c /opt/frp_{{ frp_version }}_linux_{{ frp_architecture }}/frpc.ini
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Reload systemd to recognize frp client service
+      command: systemctl daemon-reload
+
+    - name: Start and enable frp client service on worker nodes
+      service:
+        name: frpc
+        state: started
+        enabled: true
+
+    - name: Get join command from master node
+      set_fact:
+        join_command: "{{ hostvars['master_node']['join_command'].stdout }}"
+      delegate_to: localhost
+
+    - name: Run kubeadm join command on worker nodes
+      shell: "{{ join_command }}"
+      register: join_result
+      retries: 3
+      delay: 5

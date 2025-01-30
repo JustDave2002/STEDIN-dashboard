@@ -1,0 +1,58 @@
+version: '3.9'
+
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb
+    env_file:
+      - ./DB_seeding/.env.docker
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./DB_seeding/initdb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./go-backend
+      dockerfile: Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./next-frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8080
+
+  seeder:
+    build:
+      context: ./DB_seeding
+      dockerfile: Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    env_file:
+      - .env
+    command: ["go", "run", "main.go"]
+
+volumes:
+  mariadb_data:

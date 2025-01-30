@@ -1,0 +1,19 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-wireguard
+spec:
+  selector: all()
+  ingress:
+    - action: Allow
+      source:
+        nets:
+          - 10.0.0.0/24
+  egress:
+    - action: Allow
+      destination:
+        nets:
+          - 10.0.0.0/24
+  policyTypes:
+    - Ingress
+    - Egress

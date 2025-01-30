@@ -1,0 +1,51 @@
+## .golangci.yml
+#run:
+#  timeout: 5m
+#
+#linters:
+#  enable:
+#    - govet       # Reports suspicious constructs
+#    - gofmt       # Checks formatting
+#    - golint      # Style guide issues
+#    - staticcheck # Detects bugs and performance issues
+#    - errcheck    # Checks for unchecked errors
+#
+#issues:
+#  exclude-use-default: false
+#  max-issues-per-linter: 50
+#  max-same-issues: 3
+
+run:
+  timeout: 5m  # Maximum time the linter runs before timing out (adjust if needed)
+
+linters:
+  enable:
+    - govet       # Reports suspicious constructs (e.g., unreachable code, misused variables)
+    - gofmt       # Ensures Go code is properly formatted (like `gofmt -s`)
+    #- golint      # Enforces Go style guide (deprecated but still useful)
+    - errcheck    # Ensures all errors are checked and handled
+    - staticcheck # Detects bugs, optimizations, and unused code
+    - gocyclo     # (Cyclomatic Complexity) For checking complexity within the code
+
+  disable:
+    - lll         # (Long Line Linter) If your team allows long lines, disable this
+
+
+issues:
+  exclude-use-default: false  # Use default exclude patterns (set to true if customizing)
+  max-issues-per-linter: 0   # Limits the number of reported issues per linter
+  max-same-issues: 5          # Prevents spam by limiting duplicate issues
+
+output:
+  format: colored-line-number  # Makes output more readable in the terminal
+
+# Optional: Configure specific linter settings
+linters-settings:
+  gofmt:
+    simplify: true  # Apply `gofmt -s` to remove unnecessary parentheses
+  govet:
+    check-shadowing: true  # Enable variable shadowing checks
+  errcheck:
+    check-type-assertions: true  # Ensure all type assertions are checked
+  staticcheck:
+    checks: ["all"]  # Enable all Staticcheck checks

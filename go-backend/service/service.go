@@ -1,27 +1,36 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	"main/repository"
 	"main/structs"
+	"time"
 )
 
-func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
-	return repository.GetDeviceByID(deviceID)
-}
+//func GetEdgeDevice(deviceID int64) (structs.EdgeDevice, error) {
+//	return repository.GetDeviceByID(deviceID)
+//}
+//
+//func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
+//	return repository.GetAllDevices()
+//}
 
-func GetAllEdgeDevices() ([]structs.EdgeDevice, error) {
-	return repository.GetAllDevices()
-}
+func GetAllEdgeDevicesForMap(meberID int64) ([]structs.EdgeDeviceMapResponse, error) {
 
-func GetAllEdgeDevicesForMap() ([]structs.EdgeDeviceMapResponse, error) {
-	return repository.GetAllDevicesForMap()
+	// Call data layer to get devices filtered by user tags
+	devices, err := repository.GetAllDevicesForMap(meberID)
+	if err != nil {
+		return nil, err
+	}
+
+	return devices, nil
 }
 
 // GetAllDevicesWithApplications groups and converts data from the repository into DTO format
-func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error) {
+func GetAllDevicesWithApplications(meberID int64) ([]structs.DeviceWithApplicationsDTO, error) {
 	// Fetch raw data from repository
-	rawResults, err := repository.GetAllDevicesWithApplications()
+	rawResults, err := repository.GetAllDevicesWithApplications(meberID)
 	if err != nil {
 		log.Printf("Error fetching devices and applications: %v", err)
 		return nil, err
@@ -96,11 +105,91 @@ func GetAllDevicesWithApplications() ([]structs.DeviceWithApplicationsDTO, error
 		devicesWithApps = append(devicesWithApps, *deviceDTO)
 	}
 
-	// Optionally, sort the slice by DeviceID or any other criteria if needed
-	// For example, sorting by device ID:
-	// sort.Slice(devicesWithApps, func(i, j int) bool {
-	//     return devicesWithApps[i].DeviceID < devicesWithApps[j].DeviceID
-	// })
-
 	return devicesWithApps, nil
+}
+
+// GetAllMebers retrieves all mebers from the data layer
+func GetAllMebers() ([]structs.Meber, error) {
+	// Call data layer to get all mebers
+	return repository.GetAllMebers()
+}
+
+// GetMeberByID retrieves a meber from the repository layer by ID
+func GetMeberByID(meberID int64) (*structs.Meber, error) {
+	return repository.GetMeberByID(meberID)
+}
+
+func GetAppStoreData() ([]structs.ApplicationWithSensors, error) {
+	return repository.GetAppStoreData()
+}
+
+// GetEligibleDevices retrieves devices eligible for installing the given application
+func GetEligibleDevices(meberID int64, appID int64) ([]structs.EligibleDevice, error) {
+	// Step 1: Get devices accessible by the user
+	devices, err := repository.GetDevicesByMeber(meberID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract device IDs and names
+	var deviceIDs []int64
+	deviceNameMap := make(map[int64]string)
+	for _, device := range devices {
+		deviceIDs = append(deviceIDs, device.ID)
+		deviceNameMap[device.ID] = device.Name
+	}
+
+	// Step 2: Fetch eligibility data in bulk
+	eligibilityData, err := repository.CheckDevicesEligibilityBulk(deviceIDs, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 3: Map device names to the results
+	for i := range eligibilityData {
+		eligibilityData[i].Device = deviceNameMap[deviceIDs[i]]
+	}
+
+	return eligibilityData, nil
+}
+
+// AddApplicationsToDevices adds applications to the specified devices
+func AddApplicationsToDevices(userID int64, appID int64, deviceIDs []int64) error {
+	// Step 1: Verify that the user has access to the devices
+	devices, err := repository.GetDevicesByMeber(userID)
+	if err != nil {
+		return err
+	}
+
+	deviceAccessMap := make(map[int64]bool)
+	for _, device := range devices {
+		deviceAccessMap[device.ID] = true
+	}
+
+	for _, deviceID := range deviceIDs {
+		if !deviceAccessMap[deviceID] {
+			return fmt.Errorf("user does not have access to device %d", deviceID)
+		}
+	}
+
+	// Step 2: Add application instances to the devices
+	for _, deviceID := range deviceIDs {
+		err := repository.AddApplicationInstance(deviceID, appID)
+		if err != nil {
+			return fmt.Errorf("error adding application %d to device %d: %w", appID, deviceID, err)
+		}
+	}
+
+	return nil
+}
+
+// GetLogs retrieves logs based on device ID and date range
+func GetLogs(deviceID, appInstanceID int64, startDate, endDate *time.Time) ([]structs.Log, error) {
+	// Delegate the database query to the repository layer
+	logs, err := repository.FetchLogs(deviceID, appInstanceID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching logs: %w", err)
+	}
+
+	return logs, nil
 }
